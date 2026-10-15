@@ -1,69 +1,190 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { AppProvider, useApp } from "@/context/AppContext";
+import { AuthScreen } from "@/components/auth/AuthScreen";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { ProjectCard } from "@/components/gallery/ProjectCard";
+import { ProjectDetailModal } from "@/components/modals/ProjectDetailModal";
+import { InvestModal } from "@/components/modals/InvestModal";
+import { RankingBoard } from "@/components/ranking/RankingBoard";
+import { MyInvestmentsView } from "@/components/investments/MyInvestmentsView";
+import { TeamProjectManager } from "@/components/team/TeamProjectManager";
+import { AdminDashboard } from "@/components/admin/AdminDashboard";
+import { Badge } from "@/components/ui/Badge";
+import { Project } from "@/types";
+import { Search, Sparkles, Filter, TrendingUp } from "lucide-react";
+
+function MainDashboard() {
+  const { event, projects, currentUser } = useApp();
+  const [currentTab, setCurrentTab] = useState<"gallery" | "my-investments" | "team-project" | "admin">("gallery");
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [investingProject, setInvestingProject] = useState<Project | null>(null);
+  const [isProjectorRankingOpen, setIsProjectorRankingOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const filteredProjects = projects.filter(
+    (p) =>
+      !p.isHidden &&
+      (p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.teamName.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#FAFAFA] text-[#0F172A]">
+      {/* 1. 좌측 사이드바 내비게이션 (사용자 요청: 네비게이션바는 왼쪽으로 몰아주고) */}
+      <Sidebar
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        openProjectorRanking={() => setIsProjectorRankingOpen(true)}
+      />
+
+      {/* 2. 우측 스크롤 가능한 메인 콘텐츠 */}
+      <div className="flex-1 h-screen overflow-y-auto relative">
+        {/* 상단 미세 배경 글루 */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[140px] pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 md:py-12">
+          {/* 1. 프로젝트 갤러리 탭 */}
+          {currentTab === "gallery" && (
+            <div className="space-y-10">
+              {/* Hero Section (Minimalist Modern Style) */}
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-50/60 px-4 py-1.5 text-xs font-mono text-blue-700 font-semibold shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                  DEMODAY 2026 · LIVE EXHIBITION
+                </div>
+
+                <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight text-slate-900 leading-[1.08]">
+                  학생 혁신의 내일을 직접 보고, <br />
+                  가장 탁월한 팀에 <span className="text-gradient">가상 자본을 투자</span>하세요
+                </h1>
+
+                <p className="text-slate-600 text-base md:text-lg max-w-2xl leading-relaxed">
+                  팀별로 제출된 상세 랜딩페이지를 열람한 뒤, 심사표 대신 크레딧을 분배하여 실시간 순위와 평가를 결정합니다.
+                </p>
+
+                {/* 검색 바 */}
+                <div className="pt-4 max-w-md">
+                  <div className="flex items-center rounded-2xl border border-slate-200/90 bg-white shadow-sm p-1.5 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+                    <div className="p-2 text-slate-400">
+                      <Search size={18} />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="프로젝트명, 팀명 또는 기술 키워드 검색"
+                      className="w-full py-1.5 pr-3 text-xs md:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="px-2.5 py-1 text-xs font-mono text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        지우기
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 프로젝트 카드 그리드 */}
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="font-mono text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-600" />
+                    총 {filteredProjects.length}개의 출품 프로젝트
+                  </span>
+                  <span className="font-mono text-xs text-slate-400">
+                    정렬 기준: 팀 번호순 (공정성 보장)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredProjects.map((project) => (
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      onSelect={(p) => setSelectedProject(p)}
+                      onInvestClick={(p) => setInvestingProject(p)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. 내 투자 내역 탭 */}
+          {currentTab === "my-investments" && (
+            <MyInvestmentsView
+              onEditInvestment={(p) => setInvestingProject(p)}
+              onExploreGallery={() => setCurrentTab("gallery")}
+            />
+          )}
+
+          {/* 3. 우리 팀 프로젝트 관리 탭 */}
+          {currentTab === "team-project" && <TeamProjectManager />}
+
+          {/* 4. 관리자 콘솔 탭 */}
+          {currentTab === "admin" && (
+            <AdminDashboard openProjectorRanking={() => setIsProjectorRankingOpen(true)} />
+          )}
+
+          {/* 하단 푸터 */}
+          <footer className="mt-20 pt-8 border-t border-slate-200/80 flex flex-col sm:flex-row justify-between items-center text-xs font-mono text-slate-400 gap-4">
+            <div>
+              © 2026 {event.institution} {event.session}
+            </div>
+            <div className="flex gap-4">
+              <span>DESIGN: MINIMALIST MODERN</span>
+              <span>RULE: 2,000 ~ 5,000 CR</span>
+            </div>
+          </footer>
+        </div>
+      </div>
+
+      {/* 모달 레이어 */}
+      {selectedProject && (
+        <ProjectDetailModal
+          project={selectedProject}
+          onClose={() => setSelectedProject(null)}
+          onOpenInvest={(p) => setInvestingProject(p)}
+        />
+      )}
+
+      {investingProject && (
+        <InvestModal
+          project={investingProject}
+          onClose={() => setInvestingProject(null)}
+        />
+      )}
+
+      {/* 발표장 프로젝터 랭킹 보드 오버레이 */}
+      {isProjectorRankingOpen && (
+        <RankingBoard onClose={() => setIsProjectorRankingOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function RootApp() {
+  const { isLoggedIn } = useApp();
+
+  // 미로그인 상태: 회원가입 및 로그인 화면부터 보여줌!
+  if (!isLoggedIn) {
+    return <AuthScreen />;
+  }
+
+  // 로그인 상태: 좌측 사이드바 + 메인 대시보드
+  return <MainDashboard />;
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <AppProvider>
+      <RootApp />
+    </AppProvider>
   );
 }
