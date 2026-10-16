@@ -184,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="truncate">
               <div className="font-bold text-xs text-slate-800 truncate">{currentUser.name}</div>
               <div className="font-mono text-[10px] text-slate-500 truncate">
-                [{currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "JUDGE" ? "심사위원" : "참가학생"}] {currentUser.teamName || "소속 없음"}
+                [{currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "JUDGE" ? "심사위원" : currentUser.teamName ? "학생" : "일반참가"}] {currentUser.teamName || "자유 투자자"}
               </div>
             </div>
           </div>

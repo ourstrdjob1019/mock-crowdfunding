@@ -1,17 +1,20 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Event, Project, User, Investment, EventStage, RosterItem } from "@/types";
+import { Event, Project, User, Investment, EventStage, RosterItem, UserRole } from "@/types";
 import { INITIAL_EVENT, INITIAL_USERS, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_ROSTER } from "@/lib/mockData";
 import confetti from "canvas-confetti";
 
 export interface RegisterFormData {
   email: string;
   password: string;
-  institution: string;
-  department: string;
-  studentNumber: string;
   name: string;
+  role?: UserRole;
+  teamId?: string;
+  teamName?: string;
+  institution?: string;
+  department?: string;
+  studentNumber?: string;
   privacyAgreed: boolean;
 }
 
@@ -122,42 +125,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 회원가입
+  // 자유로운 회원가입 (사전 명단 제한 없이 누구나 가입 가능)
   const register = (data: RegisterFormData): { success: boolean; message: string } => {
     const trimmedEmail = data.email.trim().toLowerCase();
 
-    if (!trimmedEmail.endsWith("@gmail.com")) {
-      return { success: false, message: "아이디는 @gmail.com 주소만 사용 가능합니다." };
-    }
-
-    const rosterMatch = roster.find((r) => r.email.toLowerCase() === trimmedEmail);
-    if (!rosterMatch) {
-      return {
-        success: false,
-        message: "가입 불가: 관리자가 사전 등록한 행사 참가 명단에 존재하지 않는 Gmail 주소입니다.",
-      };
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      return { success: false, message: "올바른 이메일 주소를 입력해 주세요." };
     }
 
     const alreadyRegistered = users.find((u) => u.email.toLowerCase() === trimmedEmail);
     if (alreadyRegistered) {
-      return { success: false, message: "이미 가입 완료된 아이디입니다. 로그인해 주세요." };
+      return { success: false, message: "이미 가입 완료된 이메일입니다. 로그인해 주세요." };
     }
 
     if (!data.privacyAgreed) {
-      return { success: false, message: "개인정보 수집 및 이용에 동의해야 가입할 수 있습니다." };
+      return { success: false, message: "개인정보 수집 및 이용 동의가 필요합니다." };
     }
+
+    // 명단에 있는 경우 명단 정보 연계, 없더라도 자유롭게 설정된 정보로 가입
+    const rosterMatch = roster.find((r) => r.email.toLowerCase() === trimmedEmail);
+    const assignedRole: UserRole = data.role || rosterMatch?.role || "STUDENT";
+    const assignedTeamId = data.teamId !== undefined ? data.teamId : rosterMatch?.teamId;
+    const assignedTeamName = data.teamName !== undefined ? data.teamName : rosterMatch?.teamName;
 
     const newUser: User = {
       id: `user-${Date.now()}`,
       email: trimmedEmail,
       password: data.password || "password123",
-      name: data.name || rosterMatch.name,
-      institution: data.institution || rosterMatch.institution,
-      department: data.department || rosterMatch.department,
-      studentNumber: data.studentNumber || rosterMatch.studentNumber,
-      role: rosterMatch.role,
-      teamId: rosterMatch.teamId,
-      teamName: rosterMatch.teamName,
+      name: data.name.trim() || rosterMatch?.name || trimmedEmail.split("@")[0],
+      institution: data.institution || rosterMatch?.institution || event.institution,
+      department: data.department || rosterMatch?.department || "자유 참가",
+      studentNumber: data.studentNumber || rosterMatch?.studentNumber || "",
+      role: assignedRole,
+      teamId: assignedTeamId || undefined,
+      teamName: assignedTeamName || undefined,
       eventId: event.id,
       privacyAgreed: true,
     };
@@ -177,7 +178,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      message: `${newUser.name}님의 회원가입이 완료되었습니다. (배정 팀: ${newUser.teamName || "소속 없음"})`,
+      message: `${newUser.name}님 환영합니다! 10,000 CR이 충전되었습니다.`,
     };
   };
 
