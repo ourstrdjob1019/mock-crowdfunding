@@ -5,22 +5,26 @@ import { Project } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ArrowUpRight, CheckCircle2, UserCheck, Eye } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, UserCheck, Eye, Edit3, Sparkles } from "lucide-react";
 
 interface ProjectCardProps {
   project: Project;
   onSelect: (project: Project) => void;
   onInvestClick: (project: Project) => void;
+  onEditClick?: (project: Project) => void;
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   onSelect,
   onInvestClick,
+  onEditClick,
 }) => {
   const { currentUser, getUserInvestmentForProject, event } = useApp();
   const existingInvestment = currentUser ? getUserInvestmentForProject(project.id) : undefined;
-  const isMyTeam = currentUser?.teamId === project.teamId;
+  const isMyTeam = currentUser?.teamId && currentUser.teamId === project.teamId;
+  const isMyProject = currentUser?.id === project.authorId;
+  const canEdit = isMyProject || currentUser?.role === "ADMIN";
 
   return (
     <div className="group bg-white rounded-2xl border border-slate-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden hover:-translate-y-1 relative">
@@ -46,17 +50,19 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         </div>
 
         {/* 내 상태 표시 (우상단) */}
-        {isMyTeam && (
+        {isMyProject ? (
+          <div className="absolute top-3 right-3 bg-amber-500 text-white px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 shadow-md">
+            <Sparkles size={12} /> 내 출품작
+          </div>
+        ) : isMyTeam ? (
           <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm text-slate-900 border border-slate-300 px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
             <UserCheck size={12} className="text-blue-600" /> 우리 팀
           </div>
-        )}
-
-        {existingInvestment && !isMyTeam && (
+        ) : existingInvestment ? (
           <div className="absolute top-3 right-3 bg-accent-gradient text-white px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-accent">
             <CheckCircle2 size={12} /> 투자 완료: {existingInvestment.amount.toLocaleString()} CR
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* 본문 정보 영역 */}
@@ -87,12 +93,19 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             onClick={() => onSelect(project)}
             className="text-xs font-semibold text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <Eye size={14} /> 랜딩페이지 열람
+            <Eye size={14} /> 상세페이지 열람
           </button>
 
-          {/* 투자 버튼 로직 */}
-          {event.currentStage === "FUNDING_OPEN" ? (
-            isMyTeam ? (
+          {/* 투자 또는 수정 버튼 로직 */}
+          {canEdit && onEditClick ? (
+            <button
+              onClick={() => onEditClick(project)}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+            >
+              <Edit3 size={13} /> 수정하기
+            </button>
+          ) : event.currentStage === "FUNDING_OPEN" ? (
+            isMyTeam || isMyProject ? (
               <span className="text-xs font-mono font-semibold text-slate-400">
                 [자기 팀 투자 불가]
               </span>

@@ -25,66 +25,8 @@ export const INITIAL_ROSTER: RosterItem[] = [
     studentNumber: "2021-14022",
   },
   {
-    email: "designer@gmail.com",
-    name: "박서연",
-    role: "STUDENT",
-    teamId: "team-02",
-    teamName: "아키스케치 랩 (Team 02)",
-    institution: "서울혁신대학교",
-    department: "산업디자인과",
-    studentNumber: "2022-11089",
-  },
-  {
-    email: "bio@gmail.com",
-    name: "최현우",
-    role: "STUDENT",
-    teamId: "team-03",
-    teamName: "모노리스 테크 (Team 03)",
-    institution: "서울혁신대학교",
-    department: "신소재공학과",
-    studentNumber: "2020-15993",
-  },
-  {
-    email: "health@gmail.com",
-    name: "정다은",
-    role: "STUDENT",
-    teamId: "team-04",
-    teamName: "에피쿠로스 AI (Team 04)",
-    institution: "서울혁신대학교",
-    department: "식품영양학과",
-    studentNumber: "2023-10291",
-  },
-  {
-    email: "robot@gmail.com",
-    name: "한지민",
-    role: "STUDENT",
-    teamId: "team-05",
-    teamName: "시냅스 다이내믹스 (Team 05)",
-    institution: "서울혁신대학교",
-    department: "기계항공공학부",
-    studentNumber: "2022-14002",
-  },
-  {
-    email: "lab@gmail.com",
-    name: "윤성호",
-    role: "STUDENT",
-    teamId: "team-06",
-    teamName: "페이퍼리스 랩 (Team 06)",
-    institution: "서울혁신대학교",
-    department: "화학생명공학과",
-    studentNumber: "2021-13840",
-  },
-  {
-    email: "judge.kim@gmail.com",
-    name: "김진우 심사역",
-    role: "JUDGE",
-    institution: "에이스인베스트먼트",
-    department: "초기투자본부",
-    studentNumber: "JUDGE-01",
-  },
-  {
     email: "admin@gmail.com",
-    name: "행사 총괄 관리자",
+    name: "총괄 관리자",
     role: "ADMIN",
     institution: "창업교육센터",
     department: "운영총괄",
@@ -108,42 +50,16 @@ export const INITIAL_USERS: User[] = [
     privacyAgreed: true,
   },
   {
-    id: "user-student-2",
-    email: "designer@gmail.com",
-    password: "password123",
-    name: "박서연",
-    institution: "서울혁신대학교",
-    department: "산업디자인과",
-    studentNumber: "2022-11089",
-    role: "STUDENT",
-    teamId: "team-02",
-    teamName: "아키스케치 랩 (Team 02)",
-    eventId: "evt-2026-fall-01",
-    privacyAgreed: true,
-  },
-  {
-    id: "user-judge-1",
-    email: "judge.kim@gmail.com",
-    password: "password123",
-    name: "김진우 심사역",
-    institution: "에이스인베스트먼트",
-    department: "초기투자본부",
-    studentNumber: "JUDGE-01",
-    role: "JUDGE",
-    teamId: undefined,
-    eventId: "evt-2026-fall-01",
-    privacyAgreed: true,
-  },
-  {
     id: "user-admin-1",
     email: "admin@gmail.com",
     password: "password123",
-    name: "행사 총괄 관리자",
+    name: "총괄 관리자",
     institution: "창업교육센터",
     department: "운영총괄",
     studentNumber: "ADMIN-00",
     role: "ADMIN",
     teamId: undefined,
+    teamName: undefined,
     eventId: "evt-2026-fall-01",
     privacyAgreed: true,
   },
@@ -157,9 +73,17 @@ export const INITIAL_PROJECTS: Project[] = [
     teamNumber: 1,
     title: "뉴로보이스 (NeuroVoice) — 신경 뇌파 기반 실시간 음성 합성 디바이스",
     summary: "루게릭병 및 발화 장애인을 위한 비침습적 초소형 이어셋과 온디바이스 생성 AI 보조공학 솔루션",
-    description: `인간의 의사소통 권리는 어떤 순간에도 박탈되어서는 안 됩니다.
+    description: `[프로젝트 핵심 요약]
+인간의 의사소통 권리는 어떤 순간에도 박탈되어서는 안 됩니다.
 뉴로보이스는 성대를 사용할 수 없는 근위축성 측삭경화증 환자 및 성대 절제 수술 환자를 위해, 귀 뒤에서 측정되는 미세한 뇌파(EEG)와 표면 안면 근전도(sEMG) 신호를 98.4%의 정확도로 해석합니다.
-자체 경량화된 온디바이스 SLM 모델을 통해 지연시간 80ms 이내로 착용자의 본래 목소리를 복원하여 스피커로 출력합니다.`,
+
+[기술 및 기능적 특장점]
+1. 초소형 인이어 디바이스: 일상생활에서 부담 없이 착용 가능한 12g 초경량 설계
+2. 온디바이스 SLM 탑재: 인터넷 연결 없이 80ms 초저지연 실시간 음성 합성
+3. 음색 복원 알고리즘: 환자의 발병 전 과거 음성 녹음본을 기반으로 고유 음색 99% 재현
+
+[크라우드펀딩 목표]
+시제품 2차 금형 제작 및 서울대병원 임상 피험자 파일럿 테스트 진행을 위한 연구개발비로 활용됩니다.`,
     thumbnailUrl: "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1200&q=80",
     landingFormat: "IMAGE",
     landingUrl: "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1600&q=80",
@@ -169,140 +93,47 @@ export const INITIAL_PROJECTS: Project[] = [
       "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1600&q=80"
     ],
     lastModifierName: "임종락",
-    lastModifiedAt: "2026-10-15 11:20",
+    lastModifiedAt: "2026-10-16 14:20",
     isHidden: false,
-    totalCredits: 14000,
-    investorCount: 4,
+    totalCredits: 6000,
+    investorCount: 2,
+    authorId: "user-student-1",
+    authorName: "임종락",
+    authorEmail: "student1@gmail.com",
   },
   {
     id: "proj-02",
     teamId: "team-02",
     teamName: "아키스케치 랩",
     teamNumber: 2,
-    title: "BIM-Forge — 손스케치 한 장으로 1분 만에 생성되는 건축 법규 검토 및 3D 모델링",
-    summary: "건축사를 위한 설계 자동화 SaaS. 복잡한 지자체 조례 자동 필터링 및 BIM 모델링 자동 생성",
-    description: `건축 설계 초기 기획 단계에서 법규 검토에만 평균 14일이 소요됩니다.
-BIM-Forge는 아이패드 손스케치와 대지 지번을 입력하면, 지자체 건폐율·용적률·일조사선 제한을 실시간 반영하여 즉시 시공 가능한 3D Revit 호환 모델과 공사비 개략 견적서를 생성합니다.`,
+    title: "BIM-Forge — 손스케치 한 장으로 1분 만에 완성되는 건축 3D 모델링 SaaS",
+    summary: "건축사를 위한 설계 자동화 솔루션. 복잡한 지자체 조례 자동 필터링 및 BIM 모델링 자동 생성",
+    description: `[프로젝트 핵심 요약]
+건축 설계 초기 기획 단계에서 법규 검토에만 평균 14일이 소요됩니다.
+BIM-Forge는 아이패드 손스케치와 대지 지번을 입력하면, 지자체 건폐율·용적률·일조사선 제한을 실시간 반영하여 즉시 시공 가능한 3D Revit 호환 모델과 공사비 개략 견적서를 생성합니다.
+
+[기술 및 기능적 특장점]
+1. 도면 생성 AI 엔진: 2D 라인 스케치를 3D 파라메트릭 볼륨으로 실시간 변환
+2. 전국 지자체 조례 DB 연동: 최신 건축법 및 도시계획 조례 위반 여부 3초 내 검토
+3. IFC 및 Revit 파일 즉시 내보내기
+
+[크라우드펀딩 목표]
+전국 50개 건축사사무소 대상 클로즈드 베타 서비스 및 클라우드 GPU 인프라 확장을 위해 펀딩을 진행합니다.`,
     thumbnailUrl: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1200&q=80",
-    landingFormat: "IMAGE",
-    landingUrl: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
+    landingFormat: "PDF",
+    landingUrl: "https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf",
     landingImages: [
-      "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80",
-      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1600&q=80"
+      "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80"
     ],
-    lastModifierName: "박서연",
-    lastModifiedAt: "2026-10-15 13:45",
+    lastModifierName: "총괄 관리자",
+    lastModifiedAt: "2026-10-16 15:10",
     isHidden: false,
-    totalCredits: 17500,
-    investorCount: 5,
-  },
-  {
-    id: "proj-03",
-    teamId: "team-03",
-    teamName: "모노리스 테크",
-    teamNumber: 3,
-    title: "탄소 네거티브 바이오 시멘트 블록 — 산업 부산물과 미생물 침전 기술",
-    summary: "전통 포틀랜드 시멘트 대비 탄소 배출량 92% 감축, 강도 130% 향상의 친환경 조달 건자재",
-    description: `전 세계 온실가스 배출의 8%가 시멘트 생산에서 비롯됩니다.
-모노리스는 제철 슬래그와 미생물 유도 탄산염 침전(MICP) 공법을 결합하여 가열 소성 공정 없이 상온에서 굳는 친환경 벽돌 및 보차도 블록을 양산합니다. 이미 한국건설생활환경시험연구원(KCL) 압축강도 테스트를 통과했습니다.`,
-    thumbnailUrl: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&q=80",
-    landingFormat: "IMAGE",
-    landingUrl: "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1600&q=80",
-    landingImages: [
-      "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1600&q=80"
-    ],
-    lastModifierName: "최현우",
-    lastModifiedAt: "2026-10-14 18:10",
-    isHidden: false,
-    totalCredits: 9000,
-    investorCount: 3,
-  },
-  {
-    id: "proj-04",
-    teamId: "team-04",
-    teamName: "에피쿠로스 AI",
-    teamNumber: 4,
-    title: "정밀 대사체 분석 기반 맞춤형 분자 식이 큐레이션",
-    summary: "CGM(연속혈당측정기)과 마이크로바이옴 빅데이터를 연동한 초개인화 당뇨 예방 식단 솔루션",
-    description: `같은 사과를 먹어도 사람마다 혈당 스파이크의 정도는 완전히 다릅니다.
-에피쿠로스는 개인의 장내 미생물 총 분석과 실시간 혈당 반응 데이터를 결합하여, 사용자가 지금 섭취해야 할 최적의 영양소 비율과 맞춤형 밀키트 레시피를 제안합니다.`,
-    thumbnailUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80",
-    landingFormat: "IMAGE",
-    landingUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1600&q=80",
-    landingImages: [
-      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1600&q=80"
-    ],
-    lastModifierName: "정다은",
-    lastModifiedAt: "2026-10-15 09:12",
-    isHidden: false,
-    totalCredits: 12000,
-    investorCount: 4,
-  },
-  {
-    id: "proj-05",
-    teamId: "team-05",
-    teamName: "시냅스 다이내믹스",
-    teamNumber: 5,
-    title: "군집 자율 주행 기반 고밀도 풀필먼트 물류 셔틀",
-    summary: "레일 공사 없는 3차원 그리드 주행 물류 로봇. 기존 공간 대비 보관 효율 3.8배 증대",
-    description: `기존 자동화 창고는 수억 원의 레일 설비 공사가 필요했습니다.
-시냅스 셔틀은 특허받은 4축 전방향 메카넘 휠과 분산 합의 알고리즘을 통해 일반 바닥에서도 장애물을 회피하며 1.8톤의 파렛트를 정밀 이송합니다. 중소형 e커머스 물류센터의 진입장벽을 1/5로 낮춥니다.`,
-    thumbnailUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80",
-    landingFormat: "IMAGE",
-    landingUrl: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1600&q=80",
-    landingImages: [
-      "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1600&q=80"
-    ],
-    lastModifierName: "한지민",
-    lastModifiedAt: "2026-10-15 10:05",
-    isHidden: false,
-    totalCredits: 16000,
-    investorCount: 4,
-  },
-  {
-    id: "proj-06",
-    teamId: "team-06",
-    teamName: "페이퍼리스 랩",
-    teamNumber: 6,
-    title: "연구실 비정형 실험 노트의 자동 구조화 및 LLM 지식 베이스 구축",
-    summary: "손글씨 화학 구조식과 크로마토그래피 차트를 인식하여 연구 무결성을 입증하는 차세대 ELN",
-    description: `국내 이공계 연구실의 74%가 여전히 수기 노트로 실험 과정을 기록하여 연구 데이터 유실 위험에 노출되어 있습니다.
-페이퍼리스 랩은 스마트폰으로 수기 노트를 스캔하면 화합물 분자식과 반응 조건을 즉시 표준 디지털 데이터로 변환하고, 연구 무결성 타임스탬프를 부여합니다.`,
-    thumbnailUrl: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1200&q=80",
-    landingFormat: "IMAGE",
-    landingUrl: "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1600&q=80",
-    landingImages: [
-      "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1600&q=80"
-    ],
-    lastModifierName: "윤성호",
-    lastModifiedAt: "2026-10-15 12:30",
-    isHidden: false,
-    totalCredits: 8500,
-    investorCount: 3,
+    totalCredits: 4000,
+    investorCount: 1,
+    authorId: "user-admin-1",
+    authorName: "총괄 관리자",
+    authorEmail: "admin@gmail.com",
   },
 ];
 
-export const INITIAL_INVESTMENTS: Investment[] = [
-  {
-    id: "inv-01",
-    eventId: "evt-2026-fall-01",
-    investorId: "user-student-1",
-    investorName: "임종락",
-    projectId: "proj-02",
-    teamId: "team-02",
-    amount: 3000,
-    createdAt: "2026-10-15 14:00",
-    updatedAt: "2026-10-15 14:00",
-  },
-  {
-    id: "inv-02",
-    eventId: "evt-2026-fall-01",
-    investorId: "user-student-1",
-    investorName: "임종락",
-    projectId: "proj-05",
-    teamId: "team-05",
-    amount: 4000,
-    createdAt: "2026-10-15 14:15",
-    updatedAt: "2026-10-15 14:15",
-  },
-];
+export const INITIAL_INVESTMENTS: Investment[] = [];

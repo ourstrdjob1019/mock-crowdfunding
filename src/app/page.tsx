@@ -6,6 +6,7 @@ import { AuthScreen } from "@/components/auth/AuthScreen";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ProjectCard } from "@/components/gallery/ProjectCard";
 import { ProjectDetailModal } from "@/components/modals/ProjectDetailModal";
+import { ProjectFormModal } from "@/components/modals/ProjectFormModal";
 import { InvestModal } from "@/components/modals/InvestModal";
 import { RankingBoard } from "@/components/ranking/RankingBoard";
 import { MyInvestmentsView } from "@/components/investments/MyInvestmentsView";
@@ -13,13 +14,15 @@ import { TeamProjectManager } from "@/components/team/TeamProjectManager";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { Badge } from "@/components/ui/Badge";
 import { Project } from "@/types";
-import { Search, Sparkles, Filter, TrendingUp } from "lucide-react";
+import { Search, Sparkles, Filter, TrendingUp, Plus } from "lucide-react";
 
 function MainDashboard() {
   const { event, projects, currentUser } = useApp();
   const [currentTab, setCurrentTab] = useState<"gallery" | "my-investments" | "team-project" | "admin">("gallery");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [investingProject, setInvestingProject] = useState<Project | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isProjectorRankingOpen, setIsProjectorRankingOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -38,6 +41,7 @@ function MainDashboard() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         openProjectorRanking={() => setIsProjectorRankingOpen(true)}
+        openCreateProject={() => setIsCreateModalOpen(true)}
       />
 
       {/* 2. 우측 스크롤 가능한 메인 콘텐츠 */}
@@ -65,9 +69,9 @@ function MainDashboard() {
                   팀별로 제출된 상세 랜딩페이지를 열람한 뒤, 심사표 대신 크레딧을 분배하여 실시간 순위와 평가를 결정합니다.
                 </p>
 
-                {/* 검색 바 */}
-                <div className="pt-4 max-w-md">
-                  <div className="flex items-center rounded-2xl border border-slate-200/90 bg-white shadow-sm p-1.5 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+                {/* 검색 바 & 새 프로젝트 출품 등록 버튼 */}
+                <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl">
+                  <div className="flex-1 flex items-center rounded-2xl border border-slate-200/90 bg-white shadow-sm p-1.5 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
                     <div className="p-2 text-slate-400">
                       <Search size={18} />
                     </div>
@@ -75,7 +79,7 @@ function MainDashboard() {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="프로젝트명, 팀명 또는 기술 키워드 검색"
+                      placeholder="프로젝트명, 팀명 또는 키워드 검색"
                       className="w-full py-1.5 pr-3 text-xs md:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
                     />
                     {searchQuery && (
@@ -87,6 +91,14 @@ function MainDashboard() {
                       </button>
                     )}
                   </div>
+
+                  {/* 학생 및 참가자가 직접 프로젝트를 업로드하는 게시판 등록 버튼 */}
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="px-4 py-2.5 rounded-2xl bg-accent-gradient text-white font-semibold text-xs md:text-sm flex items-center justify-center gap-1.5 shadow-accent hover:shadow-accent-lg hover:-translate-y-0.5 transition-all cursor-pointer shrink-0"
+                  >
+                    <Plus size={16} /> 프로젝트 출품 등록
+                  </button>
                 </div>
               </div>
 
@@ -109,6 +121,7 @@ function MainDashboard() {
                       project={project}
                       onSelect={(p) => setSelectedProject(p)}
                       onInvestClick={(p) => setInvestingProject(p)}
+                      onEditClick={(p) => setEditingProject(p)}
                     />
                   ))}
                 </div>
@@ -151,8 +164,19 @@ function MainDashboard() {
           project={selectedProject}
           onClose={() => setSelectedProject(null)}
           onOpenInvest={(p) => setInvestingProject(p)}
+          onOpenEdit={(p) => setEditingProject(p)}
         />
       )}
+
+      {/* 프로젝트 출품 등록 및 수정 모달 */}
+      <ProjectFormModal
+        isOpen={isCreateModalOpen || Boolean(editingProject)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingProject(null);
+        }}
+        editProject={editingProject}
+      />
 
       {investingProject && (
         <InvestModal

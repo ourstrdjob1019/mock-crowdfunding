@@ -67,6 +67,9 @@ export interface Project {
   isHidden: boolean;
   totalCredits: number;
   investorCount: number;
+  authorId?: string;
+  authorName?: string;
+  authorEmail?: string;
 }
 
 export interface Investment {

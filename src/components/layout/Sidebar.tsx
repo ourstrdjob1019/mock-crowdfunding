@@ -11,19 +11,22 @@ import {
   LogOut, 
   Sparkles, 
   CreditCard, 
-  ChevronRight
+  ChevronRight,
+  Plus
 } from "lucide-react";
 
 interface SidebarProps {
   currentTab: "gallery" | "my-investments" | "team-project" | "admin";
   setCurrentTab: (tab: "gallery" | "my-investments" | "team-project" | "admin") => void;
   openProjectorRanking: () => void;
+  openCreateProject?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   setCurrentTab,
   openProjectorRanking,
+  openCreateProject,
 }) => {
   const { event, currentUser, users, setCurrentUser, logout, remainingCredits, usedCredits } = useApp();
 
@@ -165,6 +168,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
         </nav>
+
+        {openCreateProject && (
+          <div className="px-4 pt-1 pb-2">
+            <button
+              onClick={openCreateProject}
+              className="w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200/80 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <Plus size={15} /> 새 프로젝트 출품 등록
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4. 하단 프로필 및 송출 */}

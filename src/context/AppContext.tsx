@@ -40,7 +40,11 @@ interface AppContextType {
   invest: (projectId: string, amount: number) => { success: boolean; message: string };
   getUserInvestmentForProject: (projectId: string) => Investment | undefined;
   getUserTotalInvestments: () => Investment[];
-  updateProject: (project: Partial<Project> & { id: string }) => void;
+  createProject: (
+    data: Omit<Project, "id" | "totalCredits" | "investorCount" | "lastModifierName" | "lastModifiedAt" | "isHidden">
+  ) => { success: boolean; project?: Project; message: string };
+  updateProject: (project: Partial<Project> & { id: string }) => { success: boolean; message: string };
+  deleteProject: (projectId: string) => { success: boolean; message: string };
   resetAllData: () => void;
 }
 
@@ -55,30 +59,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [investments, setInvestments] = useState<Investment[]>(INITIAL_INVESTMENTS);
 
-  // 로컬 스토리지 동기화
+  // 로컬 스토리지 동기화 (버전 체크를 통한 최신 2개 프로젝트/계정 강제 초기화 및 유지)
   useEffect(() => {
-    const savedEvent = localStorage.getItem("mc_event");
-    const savedProjects = localStorage.getItem("mc_projects");
-    const savedInvestments = localStorage.getItem("mc_investments");
-    const savedUsers = localStorage.getItem("mc_users");
-    const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+    const currentVersion = "v4_two_accounts_and_projects";
+    const savedVersion = localStorage.getItem("mc_data_version");
 
-    if (savedEvent) setEventState(JSON.parse(savedEvent));
-    if (savedProjects) setProjects(JSON.parse(savedProjects));
-    if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
-    if (savedUsers) setUsers(JSON.parse(savedUsers));
+    if (savedVersion !== currentVersion) {
+      localStorage.setItem("mc_data_version", currentVersion);
+      localStorage.setItem("mc_projects", JSON.stringify(INITIAL_PROJECTS));
+      localStorage.setItem("mc_users", JSON.stringify(INITIAL_USERS));
+      localStorage.setItem("mc_investments", JSON.stringify(INITIAL_INVESTMENTS));
+      setProjects(INITIAL_PROJECTS);
+      setUsers(INITIAL_USERS);
+      setInvestments(INITIAL_INVESTMENTS);
 
-    if (savedCurrentUserId) {
-      const allUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-      const found = allUsers.find((u: User) => u.id === savedCurrentUserId);
-      if (found) {
-        setCurrentUserState(found);
-        setIsLoggedIn(true);
+      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+      if (savedCurrentUserId) {
+        const found = INITIAL_USERS.find((u) => u.id === savedCurrentUserId);
+        if (found) {
+          setCurrentUserState(found);
+          setIsLoggedIn(true);
+        }
+      }
+    } else {
+      const savedEvent = localStorage.getItem("mc_event");
+      const savedProjects = localStorage.getItem("mc_projects");
+      const savedInvestments = localStorage.getItem("mc_investments");
+      const savedUsers = localStorage.getItem("mc_users");
+      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+
+      if (savedEvent) setEventState(JSON.parse(savedEvent));
+      if (savedProjects) setProjects(JSON.parse(savedProjects));
+      if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
+      if (savedUsers) setUsers(JSON.parse(savedUsers));
+
+      if (savedCurrentUserId) {
+        const allUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+        const found = allUsers.find((u: User) => u.id === savedCurrentUserId);
+        if (found) {
+          setCurrentUserState(found);
+          setIsLoggedIn(true);
+        }
       }
     }
   }, []);
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
+    localStorage.setItem("mc_data_version", "v4_two_accounts_and_projects");
     localStorage.setItem("mc_event", JSON.stringify(newEvent));
     localStorage.setItem("mc_projects", JSON.stringify(newProjects));
     localStorage.setItem("mc_investments", JSON.stringify(newInvestments));
@@ -263,8 +290,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveToStorage(event, updatedProjects, investments, users);
   };
 
-  const updateProject = (updatedFields: Partial<Project> & { id: string }) => {
-    if (!currentUser) return;
+  // 1. 새 프로젝트 등록 (학생/유저 출품 글쓰기 기능)
+  const createProject = (
+    data: Omit<Project, "id" | "totalCredits" | "investorCount" | "lastModifierName" | "lastModifiedAt" | "isHidden">
+  ): { success: boolean; project?: Project; message: string } => {
+    if (!currentUser) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const newId = `proj-${Date.now()}`;
+    const newProject: Project = {
+      ...data,
+      id: newId,
+      teamNumber: data.teamNumber || projects.length + 1,
+      totalCredits: 0,
+      investorCount: 0,
+      lastModifierName: currentUser.name,
+      lastModifiedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
+      isHidden: false,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorEmail: currentUser.email,
+    };
+
+    const updatedProjects = [newProject, ...projects];
+    setProjects(updatedProjects);
+    saveToStorage(event, updatedProjects, investments, users);
+
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      colors: ["#0052FF", "#4D7CFF", "#FFFFFF"],
+    });
+
+    return {
+      success: true,
+      project: newProject,
+      message: "새 프로젝트가 성공적으로 출품 등록되었습니다!",
+    };
+  };
+
+  // 2. 프로젝트 수정 (작성자 본인 또는 관리자만 수정 가능)
+  const updateProject = (updatedFields: Partial<Project> & { id: string }): { success: boolean; message: string } => {
+    if (!currentUser) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const targetProject = projects.find((p) => p.id === updatedFields.id);
+    if (!targetProject) {
+      return { success: false, message: "해당 프로젝트를 찾을 수 없습니다." };
+    }
+
+    const isAuthor = targetProject.authorId === currentUser.id;
+    const isAdmin = currentUser.role === "ADMIN";
+    if (!isAuthor && !isAdmin) {
+      return { success: false, message: "본인이 작성한 프로젝트만 수정할 수 있습니다." };
+    }
+
     const updatedProjects = projects.map((p) =>
       p.id === updatedFields.id
         ? {
@@ -275,8 +357,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         : p
     );
+
     setProjects(updatedProjects);
     saveToStorage(event, updatedProjects, investments, users);
+    return { success: true, message: "프로젝트가 성공적으로 수정되었습니다." };
+  };
+
+  // 3. 프로젝트 삭제 (작성자 본인 또는 관리자만 삭제 가능)
+  const deleteProject = (projectId: string): { success: boolean; message: string } => {
+    if (!currentUser) {
+      return { success: false, message: "로그인이 필요합니다." };
+    }
+
+    const targetProject = projects.find((p) => p.id === projectId);
+    if (!targetProject) {
+      return { success: false, message: "삭제할 프로젝트를 찾을 수 없습니다." };
+    }
+
+    const isAuthor = targetProject.authorId === currentUser.id;
+    const isAdmin = currentUser.role === "ADMIN";
+    if (!isAuthor && !isAdmin) {
+      return { success: false, message: "본인이 작성한 프로젝트만 삭제할 수 있습니다." };
+    }
+
+    const updatedProjects = projects.filter((p) => p.id !== projectId);
+    const updatedInvestments = investments.filter((inv) => inv.projectId !== projectId);
+
+    setProjects(updatedProjects);
+    setInvestments(updatedInvestments);
+    saveToStorage(event, updatedProjects, updatedInvestments, users);
+
+    return { success: true, message: "프로젝트가 삭제되었습니다." };
   };
 
   const invest = (projectId: string, amount: number): { success: boolean; message: string } => {
@@ -401,7 +512,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         invest,
         getUserInvestmentForProject,
         getUserTotalInvestments,
+        createProject,
         updateProject,
+        deleteProject,
         resetAllData,
       }}
     >
