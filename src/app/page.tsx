@@ -114,17 +114,41 @@ function MainDashboard() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredProjects.map((project) => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      onSelect={(p) => setSelectedProject(p)}
-                      onInvestClick={(p) => setInvestingProject(p)}
-                      onEditClick={(p) => setEditingProject(p)}
-                    />
-                  ))}
-                </div>
+                {filteredProjects.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredProjects.map((project) => (
+                      <ProjectCard
+                        key={project.id}
+                        project={project}
+                        onSelect={(p) => setSelectedProject(p)}
+                        onInvestClick={(p) => setInvestingProject(p)}
+                        onEditClick={(p) => setEditingProject(p)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white/80 p-12 text-center my-6 shadow-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4">
+                      <Sparkles size={24} />
+                    </div>
+                    <h3 className="font-display text-xl font-bold text-slate-800">
+                      {searchQuery ? "검색 결과와 일치하는 프로젝트가 없습니다" : "아직 등록된 출품 프로젝트가 없습니다"}
+                    </h3>
+                    <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-6">
+                      {searchQuery
+                        ? "검색어를 다시 확인하시거나 필터를 초기화해 보세요."
+                        : "첫 번째 혁신 프로젝트를 직접 출품 등록해 보세요!"}
+                    </p>
+                    {!searchQuery && (
+                      <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-all inline-flex items-center gap-2 shadow-sm cursor-pointer"
+                      >
+                        <Plus size={16} /> 프로젝트 출품 등록하기
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

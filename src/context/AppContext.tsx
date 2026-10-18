@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Event, Project, User, Investment, EventStage, RosterItem, UserRole } from "@/types";
-import { INITIAL_EVENT, INITIAL_USERS, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_ROSTER } from "@/lib/mockData";
+import { INITIAL_EVENT, INITIAL_ROSTER } from "@/lib/mockData";
 import {
   fetchAllFromSupabase,
   dbInsertUser,
@@ -12,7 +12,9 @@ import {
   dbDeleteProject,
   dbSaveInvestment,
   dbUpdateEvent,
+  mapDbUserToModel,
 } from "@/lib/supabaseService";
+import { supabase } from "@/lib/supabase";
 import confetti from "canvas-confetti";
 
 export interface RegisterFormData {
@@ -39,7 +41,7 @@ interface AppContextType {
   remainingCredits: number;
   usedCredits: number;
   isLoading: boolean;
-  login: (email: string, password: string) => { success: boolean; message: string };
+  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
   demoLogin: (userId: string) => void;
   register: (data: RegisterFormData) => Promise<{ success: boolean; message: string }>;
   resetPassword: (userId: string) => Promise<{ success: boolean; tempPassword?: string; message: string }>;
@@ -64,17 +66,19 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [event, setEventState] = useState<Event>(INITIAL_EVENT);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<User[]>([]);
   const [roster] = useState<RosterItem[]>(INITIAL_ROSTER);
   const [currentUser, setCurrentUserState] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [investments, setInvestments] = useState<Investment[]>(INITIAL_INVESTMENTS);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const STORAGE_VERSION = "v8_pure_supabase_clean";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {
-      localStorage.setItem("mc_data_version", "v5_supabase_sync");
+      localStorage.setItem("mc_data_version", STORAGE_VERSION);
       localStorage.setItem("mc_event", JSON.stringify(newEvent));
       localStorage.setItem("mc_projects", JSON.stringify(newProjects));
       localStorage.setItem("mc_investments", JSON.stringify(newInvestments));
@@ -88,73 +92,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadData = async () => {
     setIsLoading(true);
 
-    // 1차: 로컬스토리지 캐시 우선 로드 (빠른 초기 렌더링)
-    const savedProjects = localStorage.getItem("mc_projects");
-    const savedInvestments = localStorage.getItem("mc_investments");
-    const savedUsers = localStorage.getItem("mc_users");
-    const savedEvent = localStorage.getItem("mc_event");
-    const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+    const savedVersion = localStorage.getItem("mc_data_version");
+    if (savedVersion !== STORAGE_VERSION) {
+      // 과거 캐시 완전 청소
+      localStorage.removeItem("mc_projects");
+      localStorage.removeItem("mc_users");
+      localStorage.removeItem("mc_investments");
+      localStorage.removeItem("mc_current_user_id");
+      localStorage.setItem("mc_data_version", STORAGE_VERSION);
+      setProjects([]);
+      setUsers([]);
+      setInvestments([]);
+      setCurrentUserState(null);
+      setIsLoggedIn(false);
+    } else {
+      const savedProjects = localStorage.getItem("mc_projects");
+      const savedInvestments = localStorage.getItem("mc_investments");
+      const savedUsers = localStorage.getItem("mc_users");
+      const savedEvent = localStorage.getItem("mc_event");
+      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
 
-    let currentUsersList = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-    if (savedProjects) setProjects(JSON.parse(savedProjects));
-    if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
-    if (savedUsers) setUsers(currentUsersList);
-    if (savedEvent) setEventState(JSON.parse(savedEvent));
-
-    if (savedCurrentUserId) {
-      const found = currentUsersList.find((u: User) => u.id === savedCurrentUserId);
-      if (found) {
-        setCurrentUserState(found);
-        setIsLoggedIn(true);
+      if (savedProjects) setProjects(JSON.parse(savedProjects));
+      if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
+      if (savedUsers) {
+        const parsedUsers = JSON.parse(savedUsers);
+        setUsers(parsedUsers);
+        if (savedCurrentUserId) {
+          const found = parsedUsers.find((u: User) => u.id === savedCurrentUserId);
+          if (found) {
+            setCurrentUserState(found);
+            setIsLoggedIn(true);
+          }
+        }
       }
+      if (savedEvent) setEventState(JSON.parse(savedEvent));
     }
 
-    // 2차: Supabase DB 조회하여 병합 및 동기화
+    // Supabase DB 조회하여 실시간 최신화
     try {
       const supaData = await fetchAllFromSupabase();
       if (!supaData.error) {
-        if (supaData.projects && supaData.projects.length > 0) {
-          setProjects(supaData.projects);
-        }
-        if (supaData.users && supaData.users.length > 0) {
-          // 기존 Mock 데이터와 Supabase 등록 유저 병합 (중복 이메일 제거)
-          const mergedUsers = [...INITIAL_USERS];
-          for (const su of supaData.users) {
-            const idx = mergedUsers.findIndex((u) => u.email.toLowerCase() === su.email.toLowerCase());
-            if (idx >= 0) {
-              mergedUsers[idx] = su;
-            } else {
-              mergedUsers.push(su);
-            }
-          }
-          setUsers(mergedUsers);
-          currentUsersList = mergedUsers;
-
-          if (savedCurrentUserId) {
-            const found = mergedUsers.find((u) => u.id === savedCurrentUserId);
-            if (found) {
-              setCurrentUserState(found);
-              setIsLoggedIn(true);
-            }
-          }
-        }
-        if (supaData.investments && supaData.investments.length > 0) {
-          setInvestments(supaData.investments);
-        }
+        setProjects(supaData.projects || []);
+        setUsers(supaData.users || []);
+        setInvestments(supaData.investments || []);
         if (supaData.event) {
           setEventState(supaData.event);
         }
 
-        // 로컬스토리지 갱신
+        // 로그인 유지 유저 동기화
+        const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+        if (savedCurrentUserId && supaData.users) {
+          const found = supaData.users.find((u: User) => u.id === savedCurrentUserId);
+          if (found) {
+            setCurrentUserState(found);
+            setIsLoggedIn(true);
+          }
+        }
+
         saveToStorage(
           supaData.event || event,
-          supaData.projects.length > 0 ? supaData.projects : projects,
-          supaData.investments.length > 0 ? supaData.investments : investments,
-          currentUsersList
+          supaData.projects || [],
+          supaData.investments || [],
+          supaData.users || []
         );
       }
     } catch (err) {
-      console.warn("Supabase initial fetch failed, using local cache:", err);
+      console.warn("Supabase initial fetch failed:", err);
     } finally {
       setIsLoading(false);
     }
@@ -168,44 +171,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await loadData();
   };
 
-  // 로그인 로직
-  const login = (email: string, password: string): { success: boolean; message: string } => {
+  // 로그인 로직 (메모리에 없으면 Supabase DB 직접 조회)
+  const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
     const trimmedEmail = email.trim().toLowerCase();
-    const user = users.find((u) => u.email.toLowerCase() === trimmedEmail);
 
-    if (!user) {
-      return {
-        success: false,
-        message: "등록되지 않은 계정입니다. 사전 명단에 등록된 아이디로 먼저 회원가입해 주세요.",
-      };
+    if (!trimmedEmail) {
+      return { success: false, message: "이메일 주소를 입력해 주세요." };
     }
-
     if (!password) {
       return { success: false, message: "비밀번호를 입력해 주세요." };
     }
 
-    if (user.password && user.password !== password) {
+    // 1. 현재 로드된 users 목록에서 먼저 찾기
+    let targetUser = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+
+    // 2. 없으면 Supabase DB 테이블에서 실시간 직접 검색 (관리자가 방금 DB에 추가했을 경우 대비)
+    if (!targetUser && supabase) {
+      try {
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("*")
+          .ilike("email", trimmedEmail)
+          .maybeSingle();
+
+        if (dbUser) {
+          targetUser = mapDbUserToModel(dbUser);
+          setUsers((prev) => [...prev.filter((u) => u.id !== targetUser!.id), targetUser!]);
+        }
+      } catch (err) {
+        console.warn("Supabase user search failed:", err);
+      }
+    }
+
+    if (!targetUser) {
       return {
         success: false,
-        message: "비밀번호가 올바르지 않습니다. 관리자가 발급한 8자리 임시 비밀번호를 입력하세요.",
+        message: "등록되지 않은 계정입니다. 아이디와 비밀번호를 다시 확인해 주세요.",
       };
     }
 
-    setCurrentUserState(user);
+    // 비밀번호 체크
+    if (targetUser.password && targetUser.password !== password) {
+      return {
+        success: false,
+        message: "비밀번호가 올바르지 않습니다. 다시 입력해 주세요.",
+      };
+    }
+
+    setCurrentUserState(targetUser);
     setIsLoggedIn(true);
-    localStorage.setItem("mc_current_user_id", user.id);
-    return { success: true, message: `${user.name}님 환영합니다.` };
+    localStorage.setItem("mc_current_user_id", targetUser.id);
+    return { success: true, message: `${targetUser.name}님 환영합니다.` };
   };
 
-  // 데모 간편 로그인
-  const demoLogin = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    if (user) {
-      setCurrentUserState(user);
-      setIsLoggedIn(true);
-      localStorage.setItem("mc_current_user_id", user.id);
-    }
-  };
+  // 데모 간편 로그인 (미사용 빈 함수)
+  const demoLogin = (_userId: string) => {};
 
   // 회원가입 (Supabase DB + LocalStorage 동시 저장)
   const register = async (data: RegisterFormData): Promise<{ success: boolean; message: string }> => {
@@ -217,37 +237,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const alreadyRegistered = users.find((u) => u.email.toLowerCase() === trimmedEmail);
     if (alreadyRegistered) {
-      return { success: false, message: "이미 가입 완료된 이메일입니다. 로그인해 주세요." };
+      return { success: false, message: "이미 가입된 이메일입니다. 로그인해 주세요." };
     }
 
     if (!data.privacyAgreed) {
       return { success: false, message: "개인정보 수집 및 이용 동의가 필요합니다." };
     }
 
-    const rosterMatch = roster.find((r) => r.email.toLowerCase() === trimmedEmail);
-    const assignedRole: UserRole = data.role || rosterMatch?.role || "STUDENT";
-    const assignedTeamId = data.teamId !== undefined ? data.teamId : rosterMatch?.teamId;
-    const assignedTeamName = data.teamName !== undefined ? data.teamName : rosterMatch?.teamName;
-
     const newUser: User = {
       id: `user-${Date.now()}`,
       email: trimmedEmail,
       password: data.password || "password123",
-      name: data.name.trim() || rosterMatch?.name || trimmedEmail.split("@")[0],
-      institution: data.institution || rosterMatch?.institution || event.institution,
-      department: data.department || rosterMatch?.department || "자유 참가",
-      studentNumber: data.studentNumber || rosterMatch?.studentNumber || "",
-      role: assignedRole,
-      teamId: assignedTeamId || undefined,
-      teamName: assignedTeamName || undefined,
-      eventId: event.id || "event-main",
+      name: data.name.trim() || trimmedEmail.split("@")[0],
+      institution: data.institution || event.institution,
+      department: data.department || "자유 참가",
+      studentNumber: data.studentNumber || "",
+      role: data.role || "STUDENT",
+      teamId: data.teamId || undefined,
+      teamName: data.teamName || undefined,
+      eventId: event.id || "evt-2026-fall-01",
       privacyAgreed: true,
     };
 
     // 1. Supabase DB에 저장 시도
     await dbInsertUser(newUser);
 
-    // 2. 로컬 상태 및 스토리지 업데이트
+    // 2. 로컬 상태 업데이트
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     setCurrentUserState(newUser);
@@ -528,7 +543,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       targetInvestment = {
         id: `inv-${Date.now()}`,
-        eventId: event.id || "event-main",
+        eventId: event.id || "evt-2026-fall-01",
         investorId: currentUser.id,
         investorName: currentUser.name,
         projectId,
@@ -578,9 +593,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("mc_users");
     localStorage.removeItem("mc_current_user_id");
     setEventState(INITIAL_EVENT);
-    setProjects(INITIAL_PROJECTS);
-    setInvestments(INITIAL_INVESTMENTS);
-    setUsers(INITIAL_USERS);
+    setProjects([]);
+    setInvestments([]);
+    setUsers([]);
     setCurrentUserState(null);
     setIsLoggedIn(false);
   };

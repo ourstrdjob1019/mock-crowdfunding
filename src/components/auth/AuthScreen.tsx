@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { 
   Lock, 
   Mail, 
@@ -11,8 +10,6 @@ import {
   ArrowRight, 
   AlertCircle, 
   Sparkles,
-  Zap,
-  ChevronDown,
   GraduationCap,
   Award,
   Users
@@ -20,11 +17,10 @@ import {
 import { UserRole } from "@/types";
 
 export const AuthScreen: React.FC = () => {
-  const { login, register, demoLogin, users, projects, event } = useApp();
+  const { login, register, projects, event } = useApp();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [showDemoList, setShowDemoList] = useState<boolean>(false);
 
   // 로그인 폼
   const [loginEmail, setLoginEmail] = useState("");
@@ -38,10 +34,10 @@ export const AuthScreen: React.FC = () => {
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [regPrivacyAgreed, setRegPrivacyAgreed] = useState(true);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
-    const res = login(loginEmail, loginPassword);
+    const res = await login(loginEmail, loginPassword);
     if (!res.success) {
       setErrorMessage(res.message);
     }
@@ -73,42 +69,41 @@ export const AuthScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col justify-between relative overflow-hidden py-8 px-4 sm:px-6">
-      {/* 배경 은은한 앰비언트 블러 효과 */}
-      <div className="absolute top-[-120px] left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-blue-500/10 via-indigo-500/5 to-transparent rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute inset-0 bg-dot-pattern-light opacity-40 pointer-events-none" />
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col justify-between relative overflow-hidden py-10 px-4 sm:px-6">
+      {/* 부드러운 배경 앰비언트 그라데이션 */}
+      <div className="absolute top-[-100px] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-blue-500/10 via-indigo-500/5 to-transparent rounded-full blur-[90px] pointer-events-none" />
 
-      {/* 상단 간결한 브랜드 영역 */}
-      <div className="relative z-10 max-w-md w-full mx-auto text-center pt-4 sm:pt-8">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-accent-gradient text-white shadow-accent shadow-blue-500/25 mb-3.5">
-          <Sparkles size={24} />
+      {/* 상단 브랜드 헤더 */}
+      <header className="relative z-10 max-w-md w-full mx-auto text-center pt-2 sm:pt-6">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/25 mb-3">
+          <Sparkles size={22} />
         </div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
           CROWDFUND
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-          모의 크라우드펀딩 평가 시스템
+          {event.name}
         </p>
 
-        <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-100/80 text-[11px] font-mono font-medium text-blue-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-          {event.institution} · {event.currentStage === "FUNDING_OPEN" ? "펀딩 진행 중 (LIVE)" : event.currentStage}
+        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[11px] font-mono font-medium text-slate-600">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          {event.institution} · 시스템 가동 중
         </div>
-      </div>
+      </header>
 
-      {/* 메인 인증 카드 (중앙 집중형 클린 레이아웃) */}
+      {/* 메인 로그인 / 회원가입 카드 */}
       <main className="relative z-10 max-w-md w-full mx-auto my-6">
-        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/40 p-6 sm:p-8 transition-all">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-100 p-6 sm:p-8 transition-all">
           
-          {/* 로그인 / 회원가입 탭 토글 */}
-          <div className="grid grid-cols-2 rounded-xl bg-slate-100/90 p-1 mb-6 text-xs font-semibold">
+          {/* 로그인 / 회원가입 탭 */}
+          <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1 mb-6 text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
                 setMode("login");
                 setErrorMessage("");
               }}
-              className={`py-2 rounded-lg transition-all cursor-pointer text-center ${
+              className={`py-2.5 rounded-lg transition-all cursor-pointer text-center ${
                 mode === "login"
                   ? "bg-white text-slate-900 shadow-sm font-bold"
                   : "text-slate-500 hover:text-slate-800"
@@ -122,13 +117,13 @@ export const AuthScreen: React.FC = () => {
                 setMode("register");
                 setErrorMessage("");
               }}
-              className={`py-2 rounded-lg transition-all cursor-pointer text-center ${
+              className={`py-2.5 rounded-lg transition-all cursor-pointer text-center ${
                 mode === "register"
                   ? "bg-white text-slate-900 shadow-sm font-bold"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              자유 회원가입
+              회원가입
             </button>
           </div>
 
@@ -154,7 +149,7 @@ export const AuthScreen: React.FC = () => {
                     required
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="이메일 주소 입력"
+                    placeholder="등록된 이메일 주소 입력"
                     className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
                   />
                 </div>
@@ -179,51 +174,17 @@ export const AuthScreen: React.FC = () => {
 
               <div className="pt-2">
                 <Button type="submit" variant="primary" isFullWidth size="lg">
-                  로그인하고 참여하기 <ArrowRight size={16} className="ml-2" />
+                  로그인 <ArrowRight size={16} className="ml-2" />
                 </Button>
               </div>
 
-              {/* 빠른 1초 데모 체험하기 (클릭 시 펼침) */}
-              <div className="pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowDemoList(!showDemoList)}
-                  className="w-full flex items-center justify-between text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors py-1 cursor-pointer"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Zap size={14} className="text-amber-500" />
-                    빠른 테스트용 데모 계정 선택
-                  </span>
-                  <ChevronDown
-                    size={14}
-                    className={`transition-transform duration-200 ${showDemoList ? "rotate-180 text-blue-600" : ""}`}
-                  />
-                </button>
-
-                {showDemoList && (
-                  <div className="mt-2.5 grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200/80">
-                    {users.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => demoLogin(u.id)}
-                        className="p-2 rounded-lg bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 text-left transition-all cursor-pointer group"
-                      >
-                        <span className="block text-[10px] font-mono text-blue-600 font-bold">
-                          {u.role === "ADMIN" ? "관리자" : u.role === "JUDGE" ? "심사위원" : "학생"}
-                        </span>
-                        <span className="font-semibold text-xs text-slate-800 group-hover:text-blue-600 truncate block">
-                          {u.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <p className="text-center text-[11px] text-slate-400 pt-2">
+                계정이 없으신가요? 상단의 <strong>회원가입</strong> 탭에서 직접 가입하거나 관리자에게 문의하세요.
+              </p>
             </form>
           )}
 
-          {/* 2. 자유 회원가입 폼 (사전 명단 제한 없음!) */}
+          {/* 2. 회원가입 폼 */}
           {mode === "register" && (
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
@@ -237,7 +198,7 @@ export const AuthScreen: React.FC = () => {
                     required
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="로그인에 사용할 이메일 입력"
+                    placeholder="로그인에 사용할 이메일"
                     className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
                   />
                 </div>
@@ -315,7 +276,7 @@ export const AuthScreen: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setRegRole("STUDENT"); // 일반 참가자도 투자 규칙 및 권한은 학생(평가자) 동일
+                      setRegRole("STUDENT");
                       setSelectedTeamId("");
                     }}
                     className={`py-2 px-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition-all cursor-pointer ${
@@ -330,8 +291,8 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* 학생인 경우 소속 팀 선택 */}
-              {regRole === "STUDENT" && (
+              {/* 학생인 경우 소속 팀 선택 (프로젝트가 있을 때만) */}
+              {regRole === "STUDENT" && projects.length > 0 && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                     소속 팀 선택 (선택 사항)
@@ -344,7 +305,7 @@ export const AuthScreen: React.FC = () => {
                     <option value="">소속 팀 없음 (자유 평가 및 모든 팀 투자 가능)</option>
                     {projects.map((p) => (
                       <option key={p.teamId} value={p.teamId}>
-                        {p.teamName} (소속 팀 투자 불가 규정 적용)
+                        {p.teamName}
                       </option>
                     ))}
                   </select>
@@ -362,13 +323,13 @@ export const AuthScreen: React.FC = () => {
                   className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
                 <label htmlFor="privacy-check" className="text-xs text-slate-600 leading-snug cursor-pointer">
-                  <span className="font-semibold text-slate-800">[필수] 개인정보 수집 및 이용 동의</span>: 가상 크라우드펀딩 평가 참여 및 가상 크레딧(10,000 CR) 지급에 동의합니다.
+                  <span className="font-semibold text-slate-800">[필수] 동의</span>: 가상 크라우드펀딩 모의 투자 참여 및 가상 크레딧(10,000 CR) 지급에 동의합니다.
                 </label>
               </div>
 
               <div className="pt-2">
                 <Button type="submit" variant="primary" isFullWidth size="lg">
-                  회원가입 완료 및 10,000 CR 받기 <ArrowRight size={16} className="ml-2" />
+                  가입 완료하고 10,000 CR 받기 <ArrowRight size={16} className="ml-2" />
                 </Button>
               </div>
             </form>
@@ -380,7 +341,7 @@ export const AuthScreen: React.FC = () => {
       {/* 하단 푸터 */}
       <footer className="relative z-10 max-w-md w-full mx-auto text-center py-4">
         <p className="text-[11px] font-mono text-slate-400">
-          © 2026 {event.institution} · 모의 크라우드펀딩 시스템
+          © 2026 {event.institution} · 모의 크라우드펀딩 평가 시스템
         </p>
       </footer>
     </div>
