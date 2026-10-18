@@ -40,12 +40,30 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<"detail" | "story" | "team" | "supporters">("detail");
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [securityNotice, setSecurityNotice] = useState<string>("");
+
+  // 키보드 단축키(저장, 인쇄) 차단
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "p" || e.key === "u")) {
+        e.preventDefault();
+        setSecurityNotice("🔒 출품작 지적재산권 보호를 위해 저장 및 인쇄가 제한되어 있습니다.");
+        setTimeout(() => setSecurityNotice(""), 3000);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   if (!project) return null;
 
   const existingInvestment = currentUser ? getUserInvestmentForProject(project.id) : undefined;
-  const isMyTeam = currentUser?.teamId && currentUser.teamId === project.teamId;
-  const isMyProject = currentUser?.id === project.authorId;
+  const isMyTeam = Boolean(currentUser?.teamId && currentUser.teamId === project.teamId);
+  const isMyProject = Boolean(
+    currentUser &&
+      (currentUser.id === project.authorId ||
+        (currentUser.email && project.authorEmail?.toLowerCase() === currentUser.email.toLowerCase()))
+  );
   const canEdit = isMyProject || currentUser?.role === "ADMIN";
 
   const allImages = project.landingImages && project.landingImages.length > 0
@@ -59,6 +77,12 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const fundingRate = Math.round((project.totalCredits / targetGoalCredits) * 100);
   const projectSupporters = investments.filter((inv) => inv.projectId === project.id);
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setSecurityNotice("🔒 저작권 및 아이디어 보호를 위해 마우스 우클릭 저장이 제한되어 있습니다.");
+    setTimeout(() => setSecurityNotice(""), 3000);
+  };
+
   const handleDelete = async () => {
     if (confirm("정말로 이 프로젝트를 삭제하시겠습니까?")) {
       const res = await deleteProject(project.id);
@@ -71,7 +95,17 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-md flex items-start justify-center p-2 sm:p-4 md:p-6">
+    <div 
+      onContextMenu={handleContextMenu}
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-md flex items-start justify-center p-2 sm:p-4 md:p-6 select-none"
+    >
+      {/* 보안 경고 토스트 */}
+      {securityNotice && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-2.5 rounded-full bg-slate-900/90 text-white border border-slate-700 shadow-2xl text-xs font-semibold flex items-center gap-2 animate-bounce">
+          <ShieldAlert size={16} className="text-amber-400" />
+          {securityNotice}
+        </div>
+      )}
       <div className="bg-white rounded-3xl border border-slate-200/90 w-full max-w-5xl relative shadow-2xl overflow-hidden my-4 md:my-8 flex flex-col">
         
         {/* 1. 상단 G마켓 스타일 탑 바 (네비게이션 & 작성자 권한 툴바) */}
@@ -368,15 +402,17 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
 
                 {/* IMAGE 포맷: G마켓처럼 세로로 시원하게 이어지는 실물 상세페이지 롤링 */}
                 {project.landingFormat === "IMAGE" && (
-                  <div className="space-y-0 max-w-3xl mx-auto rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+                  <div className="space-y-0 max-w-3xl mx-auto rounded-2xl overflow-hidden shadow-sm border border-slate-200 select-none">
                     {(project.landingImages && project.landingImages.length > 0 ? project.landingImages : [project.landingUrl]).map((imgUrl, idx) => (
-                      <div key={idx} className="relative bg-slate-100">
+                      <div key={idx} className="relative bg-slate-100 select-none">
                         <img
                           src={imgUrl}
                           alt={`상세페이지 파트 ${idx + 1}`}
-                          className="w-full h-auto block object-cover"
+                          draggable={false}
+                          onDragStart={(e) => e.preventDefault()}
+                          className="w-full h-auto block object-cover pointer-events-auto select-none"
                         />
-                        <div className="absolute bottom-2 right-2 bg-slate-900/70 text-white font-mono text-[10px] px-2 py-0.5 rounded backdrop-blur-sm">
+                        <div className="absolute bottom-2 right-2 bg-slate-900/70 text-white font-mono text-[10px] px-2 py-0.5 rounded backdrop-blur-sm pointer-events-none">
                           PAGE {idx + 1}
                         </div>
                       </div>
@@ -384,23 +420,18 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                   </div>
                 )}
 
-                {/* PDF 포맷: 웹 내장 PDF 뷰어 */}
+                {/* PDF 포맷: 웹 내장 보안 PDF 뷰어 (다운로드 링크 차단 및 툴바 숨김) */}
                 {project.landingFormat === "PDF" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-mono text-slate-500">PDF 프레젠테이션 문서 열람</span>
-                      <a
-                        href={project.landingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold transition-all cursor-pointer"
-                      >
-                        <Maximize2 size={13} /> 새 창 전체화면 열기
-                      </a>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-mono font-medium border border-amber-200/80">
+                        <ShieldAlert size={13} className="text-amber-600" /> 무단 다운로드 및 복제 방지
+                      </span>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 h-[650px]">
+                    <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 h-[650px] relative">
                       <iframe
-                        src={project.landingUrl}
+                        src={project.landingUrl.includes("#") ? project.landingUrl : `${project.landingUrl}#toolbar=0&navpanes=0&scrollbar=0`}
                         className="w-full h-full"
                         title="PDF Document Viewer"
                       />

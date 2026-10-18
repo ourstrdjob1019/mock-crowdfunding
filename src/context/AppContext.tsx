@@ -503,8 +503,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "해당 프로젝트를 찾을 수 없습니다." };
     }
 
-    if (currentUser.teamId && currentUser.teamId === targetProject.teamId) {
-      return { success: false, message: "자신의 소속 팀 프로젝트에는 투자할 수 없습니다." };
+    const isAuthor =
+      targetProject.authorId === currentUser.id ||
+      (Boolean(currentUser.email) && targetProject.authorEmail?.toLowerCase() === currentUser.email.toLowerCase());
+    const isMyTeam = Boolean(currentUser.teamId && currentUser.teamId === targetProject.teamId);
+
+    if (isAuthor || isMyTeam) {
+      return { success: false, message: "본인이 출품 등록한 프로젝트에는 투자할 수 없습니다." };
     }
 
     if (amount < event.minInvestment || amount > event.maxInvestment) {

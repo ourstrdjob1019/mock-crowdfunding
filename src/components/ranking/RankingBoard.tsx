@@ -12,6 +12,19 @@ interface RankingBoardProps {
 export const RankingBoard: React.FC<RankingBoardProps> = ({ onClose }) => {
   const { event, projects, toggleRankingPublic, currentUser } = useApp();
 
+  const [ratio, setRatio] = React.useState({ creditUnit: 1000, scorePerUnit: 10 });
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem("mc_score_ratio");
+      if (saved) setRatio(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const calculateScore = (credits: number) => {
+    if (!ratio.creditUnit || ratio.creditUnit <= 0) return 0;
+    return Math.round(((credits / ratio.creditUnit) * ratio.scorePerUnit) * 10) / 10;
+  };
+
   const sortedProjects = [...projects]
     .filter((p) => !p.isHidden)
     .sort((a, b) => {
@@ -173,22 +186,30 @@ export const RankingBoard: React.FC<RankingBoardProps> = ({ onClose }) => {
                     </div>
                   </div>
 
-                  {/* 펀딩 결과 수치 */}
-                  <div className="flex items-center space-x-8 self-end md:self-center font-mono">
+                  {/* 펀딩 결과 수치 & 환산 점수 */}
+                  <div className="flex items-center space-x-6 md:space-x-8 self-end md:self-center font-mono">
                     <div className="text-right">
                       <span className="text-slate-400 text-xs uppercase block flex items-center gap-1 justify-end">
-                        <Users size={12} /> 투자자 수
+                        <Users size={12} /> 투자자
                       </span>
-                      <span className="text-lg md:text-xl font-bold text-slate-200">
+                      <span className="text-base md:text-lg font-bold text-slate-200">
                         {proj.investorCount}명
                       </span>
                     </div>
 
-                    <div className="text-right min-w-[150px]">
-                      <span className="text-slate-400 text-xs uppercase block">누적 펀딩 크레딧</span>
-                      <span className="text-2xl md:text-3xl font-black text-blue-400 tracking-tight">
+                    <div className="text-right min-w-[130px]">
+                      <span className="text-slate-400 text-xs uppercase block">누적 크레딧</span>
+                      <span className="text-xl md:text-2xl font-black text-slate-200 tracking-tight">
                         {proj.totalCredits.toLocaleString()}{" "}
                         <span className="text-xs font-normal text-slate-400">CR</span>
+                      </span>
+                    </div>
+
+                    <div className="text-right min-w-[130px] pl-4 border-l border-slate-700/80">
+                      <span className="text-blue-400 text-xs uppercase font-bold block">★ 환산 점수</span>
+                      <span className="text-2xl md:text-3xl font-black text-emerald-400 tracking-tight">
+                        {calculateScore(proj.totalCredits).toFixed(1)}{" "}
+                        <span className="text-xs font-normal text-slate-400">점</span>
                       </span>
                     </div>
                   </div>

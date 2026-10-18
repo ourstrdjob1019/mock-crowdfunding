@@ -31,7 +31,6 @@ export const AuthScreen: React.FC = () => {
   const [regPassword, setRegPassword] = useState("");
   const [regName, setRegName] = useState("");
   const [regRole, setRegRole] = useState<UserRole>("STUDENT");
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [regPrivacyAgreed, setRegPrivacyAgreed] = useState(true);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -47,19 +46,11 @@ export const AuthScreen: React.FC = () => {
     e.preventDefault();
     setErrorMessage("");
 
-    let teamName: string | undefined = undefined;
-    if (regRole === "STUDENT" && selectedTeamId) {
-      const foundProject = projects.find((p) => p.teamId === selectedTeamId);
-      teamName = foundProject?.teamName;
-    }
-
     const res = await register({
       email: regEmail,
       password: regPassword,
       name: regName,
       role: regRole,
-      teamId: selectedTeamId || undefined,
-      teamName: teamName || undefined,
       privacyAgreed: regPrivacyAgreed,
     });
 
@@ -259,10 +250,7 @@ export const AuthScreen: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setRegRole("JUDGE");
-                      setSelectedTeamId("");
-                    }}
+                    onClick={() => setRegRole("JUDGE")}
                     className={`py-2 px-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition-all cursor-pointer ${
                       regRole === "JUDGE"
                         ? "border-blue-500 bg-blue-50/70 text-blue-700 font-bold shadow-sm"
@@ -275,42 +263,18 @@ export const AuthScreen: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setRegRole("STUDENT");
-                      setSelectedTeamId("");
-                    }}
+                    onClick={() => setRegRole("STUDENT")}
                     className={`py-2 px-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                      regRole === "STUDENT" && !selectedTeamId
+                      regRole === "STUDENT"
                         ? "border-blue-500 bg-blue-50/70 text-blue-700 font-bold shadow-sm"
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    <Users size={16} className={regRole === "STUDENT" && !selectedTeamId ? "text-blue-600" : "text-slate-400"} />
+                    <Users size={16} className={regRole === "STUDENT" ? "text-blue-600" : "text-slate-400"} />
                     <span>일반 참가</span>
                   </button>
                 </div>
               </div>
-
-              {/* 학생인 경우 소속 팀 선택 (프로젝트가 있을 때만) */}
-              {regRole === "STUDENT" && projects.length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    소속 팀 선택 (선택 사항)
-                  </label>
-                  <select
-                    value={selectedTeamId}
-                    onChange={(e) => setSelectedTeamId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none cursor-pointer"
-                  >
-                    <option value="">소속 팀 없음 (자유 평가 및 모든 팀 투자 가능)</option>
-                    {projects.map((p) => (
-                      <option key={p.teamId} value={p.teamId}>
-                        {p.teamName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* 개인정보 수집 및 이용 동의 */}
               <div className="pt-1 flex items-start gap-2">

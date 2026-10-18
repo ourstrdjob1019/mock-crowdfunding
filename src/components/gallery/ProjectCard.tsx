@@ -22,8 +22,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const { currentUser, getUserInvestmentForProject, event } = useApp();
   const existingInvestment = currentUser ? getUserInvestmentForProject(project.id) : undefined;
-  const isMyTeam = currentUser?.teamId && currentUser.teamId === project.teamId;
-  const isMyProject = currentUser?.id === project.authorId;
+  const isMyTeam = Boolean(currentUser?.teamId && currentUser.teamId === project.teamId);
+  const isMyProject = Boolean(
+    currentUser &&
+      (currentUser.id === project.authorId ||
+        (currentUser.email && project.authorEmail?.toLowerCase() === currentUser.email.toLowerCase()))
+  );
   const canEdit = isMyProject || currentUser?.role === "ADMIN";
 
   return (

@@ -11,6 +11,8 @@ export interface Event {
   maxInvestment: number; // 5,000
   currentStage: EventStage;
   isRankingPublic: boolean;
+  creditUnitForScore?: number; // 환산 기준 크레딧 (예: 1000 CR)
+  scorePerCreditUnit?: number; // 환산 점수 (예: 10 점)
 }
 
 export interface Team {
