@@ -18,7 +18,7 @@ import {
 interface SidebarProps {
   currentTab: "gallery" | "my-investments" | "team-project" | "admin";
   setCurrentTab: (tab: "gallery" | "my-investments" | "team-project" | "admin") => void;
-  openProjectorRanking: () => void;
+  openProjectorRanking?: () => void;
   openCreateProject?: () => void;
 }
 
@@ -181,15 +181,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* 4. 하단 프로필 및 송출 */}
+      {/* 4. 하단 프로필 */}
       <div className="p-4 border-t border-slate-100 space-y-3 bg-slate-50/50">
-        <button
-          onClick={openProjectorRanking}
-          className="w-full py-2.5 px-3.5 rounded-xl bg-accent-gradient text-white text-xs font-bold shadow-accent hover:shadow-accent-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <Trophy size={14} /> 빔프로젝터 랭킹 송출 ↗
-        </button>
-
         <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div className="flex items-center space-x-2.5 truncate">
             <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">

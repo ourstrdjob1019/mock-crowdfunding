@@ -378,11 +378,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "로그인이 필요합니다." };
     }
 
-    const newId = `proj-${Date.now()}`;
+    const newId = `proj-${Date.now().toString().slice(-6)}`;
+    const teamId = data.teamId || `team-${Date.now().toString().slice(-6)}`;
     const newProject: Project = {
       ...data,
       id: newId,
-      teamId: data.teamId || `team-${Date.now()}`,
+      teamId,
       teamNumber: data.teamNumber || projects.length + 1,
       totalCredits: 0,
       investorCount: 0,
@@ -394,16 +395,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       authorEmail: currentUser.email,
     };
 
-    // 1. Supabase DB 저장
+    // 1. Supabase DB 저장 (projects 및 teams 테이블 동시 저장)
     const dbRes = await dbInsertProject(newProject);
     if (!dbRes.success) {
       console.warn("[AppContext] Supabase DB insert failed:", dbRes.error);
     }
 
-    // 2. 로컬 상태 업데이트
+    // 2. 출품 등록자의 소속 팀 정보도 함께 갱신
+    const updatedUser: User = {
+      ...currentUser,
+      teamId,
+      teamName: data.teamName,
+    };
+    setCurrentUserState(updatedUser);
+    const updatedUsers = users.map((u) => (u.id === currentUser.id ? updatedUser : u));
+    setUsers(updatedUsers);
+    await dbInsertUser(updatedUser);
+
+    // 3. 로컬 상태 및 스토리지 업데이트
     const updatedProjects = [newProject, ...projects];
     setProjects(updatedProjects);
-    saveToStorage(event, updatedProjects, investments, users);
+    saveToStorage(event, updatedProjects, investments, updatedUsers);
 
     confetti({
       particleCount: 50,
@@ -475,8 +487,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "본인이 작성한 프로젝트만 삭제할 수 있습니다." };
     }
 
-    // Supabase DB 삭제
-    await dbDeleteProject(projectId);
+    // Supabase DB 삭제 (projects 및 teams 테이블 동시 삭제)
+    await dbDeleteProject(projectId, targetProject.teamId);
 
     const updatedProjects = projects.filter((p) => p.id !== projectId);
     const updatedInvestments = investments.filter((inv) => inv.projectId !== projectId);

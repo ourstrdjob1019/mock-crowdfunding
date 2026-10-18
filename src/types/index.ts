@@ -54,6 +54,7 @@ export type LandingFormat = "IMAGE" | "PDF" | "HTML";
 
 export interface Project {
   id: string;
+  eventId?: string;
   teamId: string;
   teamName: string;
   teamNumber: number;

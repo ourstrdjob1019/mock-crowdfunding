@@ -29,11 +29,14 @@ CREATE TABLE public.events (
 
 CREATE TABLE public.teams (
   id TEXT PRIMARY KEY DEFAULT 'team-01',
-  event_id TEXT REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id TEXT DEFAULT 'evt-2026-fall-01',
   team_number INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- team (단수형)과 teams (복수형) 이름 호환 뷰
+CREATE OR REPLACE VIEW public.team AS SELECT * FROM public.teams;
 
 CREATE TABLE public.roster (
   id TEXT PRIMARY KEY DEFAULT 'roster-01',
@@ -166,27 +169,10 @@ VALUES (
   false
 );
 
-INSERT INTO public.teams (id, event_id, team_number, name)
-VALUES 
-  ('team-01', 'evt-2026-fall-01', 1, '뉴로보이스 (Team 01)'),
-  ('team-02', 'evt-2026-fall-01', 2, '에코루프 (Team 02)');
-
+-- 5. 기본 필수 데이터 시딩 (기본 행사 정보 & 최초 관리자 계정)
+-- 사용자 요청: 미리 세팅된 더미 출품작과 테스트 계정은 제거하여 깨끗한 상태에서 직접 등록/테스트 가능하게 구성
 INSERT INTO public.users (id, event_id, email, password, name, institution, department, student_number, team_id, team_name, role, privacy_agreed)
 VALUES
-(
-  'user-student-1',
-  'evt-2026-fall-01',
-  'student1@gmail.com',
-  'password123',
-  '임종락',
-  '서울혁신대학교',
-  '컴퓨터공학과',
-  '2021-14022',
-  'team-01',
-  '뉴로보이스 (Team 01)',
-  'STUDENT',
-  true
-),
 (
   'user-admin-1',
   'evt-2026-fall-01',
@@ -200,56 +186,8 @@ VALUES
   NULL,
   'ADMIN',
   true
-);
-
-INSERT INTO public.projects (
-  id, event_id, team_id, team_name, team_number, title, summary, description,
-  thumbnail_url, landing_format, landing_url, landing_images,
-  author_id, author_name, author_email, last_modifier_name, last_modified_at,
-  is_hidden, total_credits, investor_count
 )
-VALUES
-(
-  'proj-01',
-  'evt-2026-fall-01',
-  'team-01',
-  '뉴로보이스 (Team 01)',
-  1,
-  '뉴로보이스 (NeuroVoice) — 신경 뇌파 기반 실시간 음성 합성 디바이스',
-  '루게릭병 및 발화 장애인을 위한 비침습적 초소형 이어셋과 온디바이스 생성 AI 보조공학 솔루션',
-  '인간의 의사소통 권리는 어떤 순간에도 박탈되어서는 안 됩니다. 뉴로보이스는 성대를 사용할 수 없는 근위축성 측삭경화증 환자 및 성대 절제 수술 환자를 위해, 귀 뒤에서 측정되는 미세한 뇌파와 안면 근전도 신호를 98.4%의 정확도로 해석합니다.',
-  'https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1200&q=80',
-  'IMAGE',
-  'https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1600&q=80',
-  '["https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
-  'user-student-1',
-  '임종락',
-  'student1@gmail.com',
-  '임종락',
-  to_char(now(), 'YYYY-MM-DD HH24:MI'),
-  false,
-  6000,
-  2
-),
-(
-  'proj-02',
-  'evt-2026-fall-01',
-  'team-02',
-  '에코루프 (Team 02)',
-  2,
-  '에코루프 (EcoLoop) — 건설 폐플라스틱 업사이클링 초경량 단열 방수 블록',
-  '산업 폐기물 92% 재활용, 기존 콘크리트 대비 60% 경량화 및 탄소배출 74% 감축 패시브 건축자재',
-  '도시 재생 및 제로에너지 건축물 인증을 위한 혁신 업사이클링 솔루션입니다. 열전도율 0.028W/mK로 에너지 효율을 극대화합니다.',
-  'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1200&q=80',
-  'IMAGE',
-  'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1600&q=80',
-  '["https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
-  'user-student-1',
-  '박서연',
-  'seoyeon@gmail.com',
-  '박서연',
-  to_char(now(), 'YYYY-MM-DD HH24:MI'),
-  false,
-  4000,
-  1
-);
+ON CONFLICT (email) DO NOTHING;
+
+-- ※ 팀(teams)과 출품작(projects)은 사용자가 브라우저에서 '새 프로젝트 출품 등록'을 통해 입력하면
+--    Supabase teams 및 projects 테이블에 실시간으로 자동 등록됩니다.

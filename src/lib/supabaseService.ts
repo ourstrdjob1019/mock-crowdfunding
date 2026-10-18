@@ -7,6 +7,7 @@ import { User, Project, Investment, Event, EventStage } from "@/types";
 export function mapDbProjectToModel(row: any): Project {
   return {
     id: String(row.id),
+    eventId: row.event_id || "evt-2026-fall-01",
     teamId: row.team_id || "",
     teamName: row.team_name || "",
     teamNumber: row.team_number || 1,
@@ -34,6 +35,7 @@ export function mapDbProjectToModel(row: any): Project {
 export function mapModelProjectToDb(proj: Partial<Project>): Record<string, any> {
   const dbData: Record<string, any> = {};
   if (proj.id !== undefined) dbData.id = proj.id;
+  if (proj.eventId !== undefined) dbData.event_id = proj.eventId;
   if (proj.teamId !== undefined) dbData.team_id = proj.teamId;
   if (proj.teamName !== undefined) dbData.team_name = proj.teamName;
   if (proj.teamNumber !== undefined) dbData.team_number = proj.teamNumber;
@@ -214,11 +216,57 @@ export async function dbResetPassword(userId: string, tempPassword: string): Pro
 }
 
 /**
- * 새 프로젝트 등록 (Supabase DB)
+ * 팀 정보 등록/동기화 헬퍼 (teams 및 team 단수형 테이블 모두 지원)
+ */
+async function syncTeamToDb(teamId: string, teamName: string, teamNumber: number, eventId: string = "evt-2026-fall-01") {
+  if (!supabase) return;
+
+  const teamData = {
+    id: teamId,
+    event_id: eventId,
+    team_number: teamNumber || 1,
+    name: teamName,
+  };
+
+  // 1차: teams 테이블 시도
+  const { error } = await supabase.from("teams").upsert(teamData, { onConflict: "id" });
+
+  if (error) {
+    // 2차: 테이블명이 단수형 'team'인 경우
+    if (error.message?.toLowerCase().includes("does not exist")) {
+      const res = await supabase.from("team").upsert(teamData, { onConflict: "id" });
+      if (res.error) console.warn("[SupabaseService] 'team' upsert warning:", res.error.message);
+      return;
+    }
+
+    // 3차: 외래키 제약조건 위반인 경우 event_id 제외하고 시도
+    if (error.message?.toLowerCase().includes("foreign key")) {
+      const fallbackData = {
+        id: teamId,
+        team_number: teamNumber || 1,
+        name: teamName,
+      };
+      await supabase.from("teams").upsert(fallbackData, { onConflict: "id" });
+      await supabase.from("team").upsert(fallbackData, { onConflict: "id" });
+    } else {
+      console.warn("[SupabaseService] teams upsert warning:", error.message);
+    }
+  }
+}
+
+/**
+ * 새 프로젝트 등록 (Supabase DB: teams 테이블과 projects 테이블 동시 등록)
  */
 export async function dbInsertProject(project: Project): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
+    // 1. teams (또는 team) 테이블에 팀 정보 자동 등록/동기화
+    if (project.teamName) {
+      const teamId = project.teamId || `team-${Date.now().toString().slice(-6)}`;
+      await syncTeamToDb(teamId, project.teamName, project.teamNumber || 1, project.eventId);
+    }
+
+    // 2. projects 테이블에 프로젝트 등록
     const dbProj = mapModelProjectToDb(project);
     const { error } = await supabase.from("projects").insert([dbProj]);
     if (error) {
@@ -232,11 +280,17 @@ export async function dbInsertProject(project: Project): Promise<{ success: bool
 }
 
 /**
- * 프로젝트 수정 (Supabase DB)
+ * 프로젝트 수정 (Supabase DB: teams 테이블도 함께 동기화)
  */
 export async function dbUpdateProject(projectId: string, updates: Partial<Project>): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
+    // 팀명 변경 시 teams 및 team 테이블 동기화
+    if (updates.teamName && updates.teamId) {
+      await supabase.from("teams").update({ name: updates.teamName }).eq("id", updates.teamId);
+      await supabase.from("team").update({ name: updates.teamName }).eq("id", updates.teamId);
+    }
+
     const dbUpdates = mapModelProjectToDb(updates);
     delete dbUpdates.id;
     const { error } = await supabase.from("projects").update(dbUpdates).eq("id", projectId);
@@ -251,14 +305,18 @@ export async function dbUpdateProject(projectId: string, updates: Partial<Projec
 }
 
 /**
- * 프로젝트 삭제 (Supabase DB)
+ * 프로젝트 삭제 (Supabase DB: 투자 및 프로젝트 삭제)
  */
-export async function dbDeleteProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+export async function dbDeleteProject(projectId: string, teamId?: string): Promise<{ success: boolean; error?: string }> {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
     // 프로젝트 삭제 및 연관된 투자 삭제
     await supabase.from("investments").delete().eq("project_id", projectId);
     const { error } = await supabase.from("projects").delete().eq("id", projectId);
+    if (teamId) {
+      await supabase.from("teams").delete().eq("id", teamId);
+      await supabase.from("team").delete().eq("id", teamId);
+    }
     if (error) {
       console.error("[SupabaseService] dbDeleteProject error:", error);
       return { success: false, error: error.message };
