@@ -61,7 +61,7 @@ export function mapModelProjectToDb(proj: Partial<Project>): Record<string, any>
 export function mapDbUserToModel(row: any): User {
   return {
     id: String(row.id),
-    eventId: row.event_id || "event-main",
+    eventId: row.event_id || "evt-2026-fall-01",
     email: row.email || "",
     password: row.password || row.password_hash || "password123",
     name: row.name || "",
@@ -81,7 +81,7 @@ export function mapDbUserToModel(row: any): User {
 export function mapModelUserToDb(user: User): Record<string, any> {
   return {
     id: user.id,
-    event_id: user.eventId || "event-main",
+    event_id: user.eventId || "evt-2026-fall-01",
     email: user.email.toLowerCase().trim(),
     password: user.password || "password123",
     name: user.name,
@@ -101,7 +101,7 @@ export function mapModelUserToDb(user: User): Record<string, any> {
 export function mapDbInvestmentToModel(row: any): Investment {
   return {
     id: String(row.id),
-    eventId: row.event_id || "event-main",
+    eventId: row.event_id || "evt-2026-fall-01",
     investorId: row.investor_id || "",
     investorName: row.investor_name || "",
     projectId: row.project_id || "",
@@ -118,7 +118,7 @@ export function mapDbInvestmentToModel(row: any): Investment {
 export function mapModelInvestmentToDb(inv: Investment): Record<string, any> {
   return {
     id: inv.id,
-    event_id: inv.eventId || "event-main",
+    event_id: inv.eventId || "evt-2026-fall-01",
     investor_id: inv.investorId,
     investor_name: inv.investorName,
     project_id: inv.projectId,
@@ -306,7 +306,7 @@ export async function dbUpdateEvent(event: Event): Promise<{ success: boolean; e
   try {
     const { error } = await supabase.from("events").upsert([
       {
-        id: event.id || "event-main",
+        id: event.id || "evt-2026-fall-01",
         name: event.name,
         institution: event.institution,
         session: event.session,

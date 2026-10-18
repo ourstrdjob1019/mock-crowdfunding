@@ -1,15 +1,23 @@
 -- =========================================================================
--- 모의 크라우드펀딩 (CROWDFUND) Supabase DB & 스토리지 긴급 권한 및 테이블 복구 SQL
+-- 모의 크라우드펀딩 (CROWDFUND) Supabase DB & 스토리지 통합 초기화 및 권한 설정 SQL
 -- Supabase 대시보드 (https://supabase.com/dashboard) > 프로젝트 선택 >
 -- 좌측 메뉴 [SQL Editor] > [New query] 에 이 전체 내용을 붙여넣고 [Run] 버튼을 누르세요.
 -- =========================================================================
 
--- 1. 기존 테이블 정리 및 유연한 구조로 재설정 (ID 문자열 및 자유 가입 지원)
-CREATE TABLE IF NOT EXISTS public.events (
-  id TEXT PRIMARY KEY DEFAULT 'event-main',
-  name TEXT NOT NULL DEFAULT '2026 청년 창업 모의 크라우드펀딩 대회',
-  institution TEXT NOT NULL DEFAULT '청년창업진흥원',
-  session TEXT NOT NULL DEFAULT '오후 실전 투자 세션 (본선)',
+-- 1. 기존 테이블 및 꼬여있던 제약조건 완전 초기화 (안전하게 CASCADE 삭제)
+DROP TABLE IF EXISTS public.investments CASCADE;
+DROP TABLE IF EXISTS public.projects CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.roster CASCADE;
+DROP TABLE IF EXISTS public.teams CASCADE;
+DROP TABLE IF EXISTS public.events CASCADE;
+
+-- 2. 유연한 TEXT 타입 기반 테이블 생성 (문자열 ID, UUID 모두 오류 없이 수용)
+CREATE TABLE public.events (
+  id TEXT PRIMARY KEY DEFAULT 'evt-2026-fall-01',
+  name TEXT NOT NULL DEFAULT '2026 대한민국 대학생 창업·창작 프로젝트 데모데이',
+  institution TEXT NOT NULL DEFAULT '서울혁신대학교',
+  session TEXT NOT NULL DEFAULT '제3회 정기 데모데이',
   event_date DATE NOT NULL DEFAULT CURRENT_DATE,
   base_credit INTEGER NOT NULL DEFAULT 10000,
   min_investment INTEGER NOT NULL DEFAULT 2000,
@@ -19,20 +27,35 @@ CREATE TABLE IF NOT EXISTS public.events (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 기존 id 컬럼이 UUID인 경우 TEXT로 완화 허용
-DO $$
-BEGIN
-  ALTER TABLE public.events ALTER COLUMN id TYPE TEXT;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+CREATE TABLE public.teams (
+  id TEXT PRIMARY KEY DEFAULT 'team-01',
+  event_id TEXT REFERENCES public.events(id) ON DELETE CASCADE,
+  team_number INTEGER NOT NULL DEFAULT 1,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 
-CREATE TABLE IF NOT EXISTS public.users (
+CREATE TABLE public.roster (
+  id TEXT PRIMARY KEY DEFAULT 'roster-01',
+  event_id TEXT REFERENCES public.events(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  team_id TEXT,
+  team_name TEXT,
+  role TEXT NOT NULL DEFAULT 'STUDENT',
+  institution TEXT DEFAULT '',
+  department TEXT DEFAULT '',
+  student_number TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE public.users (
   id TEXT PRIMARY KEY,
-  event_id TEXT DEFAULT 'event-main',
+  event_id TEXT DEFAULT 'evt-2026-fall-01',
   email TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL DEFAULT 'password123',
   name TEXT NOT NULL,
-  institution TEXT DEFAULT '창업지원단',
+  institution TEXT DEFAULT '서울혁신대학교',
   department TEXT DEFAULT '자유 참가',
   student_number TEXT DEFAULT '',
   team_id TEXT,
@@ -42,20 +65,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-DO $$
-BEGIN
-  ALTER TABLE public.users ALTER COLUMN id TYPE TEXT;
-  ALTER TABLE public.users ALTER COLUMN event_id TYPE TEXT;
-  ALTER TABLE public.users ALTER COLUMN team_id TYPE TEXT;
-  -- password 컬럼 없으면 추가
-  ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT DEFAULT 'password123';
-  ALTER TABLE public.users ADD COLUMN IF NOT EXISTS privacy_agreed BOOLEAN DEFAULT true;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-CREATE TABLE IF NOT EXISTS public.projects (
+CREATE TABLE public.projects (
   id TEXT PRIMARY KEY,
-  event_id TEXT DEFAULT 'event-main',
+  event_id TEXT DEFAULT 'evt-2026-fall-01',
   team_id TEXT,
   team_name TEXT NOT NULL,
   team_number INTEGER NOT NULL DEFAULT 1,
@@ -77,21 +89,9 @@ CREATE TABLE IF NOT EXISTS public.projects (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
-DO $$
-BEGIN
-  ALTER TABLE public.projects ALTER COLUMN id TYPE TEXT;
-  ALTER TABLE public.projects ALTER COLUMN event_id TYPE TEXT;
-  ALTER TABLE public.projects ALTER COLUMN team_id TYPE TEXT;
-  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS author_id TEXT;
-  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS author_name TEXT;
-  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS author_email TEXT;
-  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS landing_images JSONB DEFAULT '[]'::jsonb;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-CREATE TABLE IF NOT EXISTS public.investments (
+CREATE TABLE public.investments (
   id TEXT PRIMARY KEY,
-  event_id TEXT DEFAULT 'event-main',
+  event_id TEXT DEFAULT 'evt-2026-fall-01',
   investor_id TEXT NOT NULL,
   investor_name TEXT NOT NULL,
   project_id TEXT NOT NULL,
@@ -101,57 +101,40 @@ CREATE TABLE IF NOT EXISTS public.investments (
   updated_at TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI')
 );
 
-DO $$
-BEGIN
-  ALTER TABLE public.investments ALTER COLUMN id TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN event_id TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN investor_id TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN project_id TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN team_id TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN created_at TYPE TEXT;
-  ALTER TABLE public.investments ALTER COLUMN updated_at TYPE TEXT;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
--- =========================================================================
--- 2. 모든 테이블의 RLS 권한 완전 개방 (anon / authenticated 누구나 CRUD 가능)
--- =========================================================================
-
--- events 테이블 RLS 해제 또는 전면 허용
+-- 3. 모든 테이블의 RLS 완전 허용 (anon / public 누구나 읽기/쓰기/수정/삭제 가능)
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Full Access Events" ON public.events;
 CREATE POLICY "Public Full Access Events" ON public.events FOR ALL TO public USING (true) WITH CHECK (true);
 
--- users 테이블 RLS 해제 또는 전면 허용
+ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Full Access Teams" ON public.teams;
+CREATE POLICY "Public Full Access Teams" ON public.teams FOR ALL TO public USING (true) WITH CHECK (true);
+
+ALTER TABLE public.roster ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Full Access Roster" ON public.roster;
+CREATE POLICY "Public Full Access Roster" ON public.roster FOR ALL TO public USING (true) WITH CHECK (true);
+
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Full Access Users" ON public.users;
 CREATE POLICY "Public Full Access Users" ON public.users FOR ALL TO public USING (true) WITH CHECK (true);
 
--- projects 테이블 RLS 해제 또는 전면 허용
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Full Access Projects" ON public.projects;
 CREATE POLICY "Public Full Access Projects" ON public.projects FOR ALL TO public USING (true) WITH CHECK (true);
 
--- investments 테이블 RLS 해제 또는 전면 허용
 ALTER TABLE public.investments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Full Access Investments" ON public.investments;
 CREATE POLICY "Public Full Access Investments" ON public.investments FOR ALL TO public USING (true) WITH CHECK (true);
 
--- =========================================================================
--- 3. Supabase Storage 버킷 생성 및 업로드 권한 완전 허용
--- =========================================================================
-
--- 3-1. 썸네일 버킷 (project-thumbnails) 생성
+-- 4. Supabase Storage 버킷 생성 및 권한 완전 허용
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('project-thumbnails', 'project-thumbnails', true, 10485760)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- 3-2. 랜딩 파일 버킷 (landing-files) 생성
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('landing-files', 'landing-files', true, 26214400)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- 3-3. Storage objects 테이블 RLS 정책 (누구나 파일 조회, 업로드, 수정, 삭제 가능)
 DROP POLICY IF EXISTS "Public Storage Read" ON storage.objects;
 CREATE POLICY "Public Storage Read" ON storage.objects
   FOR SELECT TO public USING (bucket_id IN ('project-thumbnails', 'landing-files'));
@@ -168,59 +151,57 @@ DROP POLICY IF EXISTS "Public Storage Delete" ON storage.objects;
 CREATE POLICY "Public Storage Delete" ON storage.objects
   FOR DELETE TO public USING (bucket_id IN ('project-thumbnails', 'landing-files'));
 
--- =========================================================================
--- 4. 기본 행사 및 테스트 데이터 시딩 (DB가 비어있을 때 즉각 동작하도록)
--- =========================================================================
-
+-- 5. 기본 데이터 시딩 (행사, 팀, 사용자, 프로젝트)
 INSERT INTO public.events (id, name, institution, session, event_date, base_credit, min_investment, max_investment, current_stage, is_ranking_public)
 VALUES (
-  'event-main',
-  '2026 청년 창업 모의 크라우드펀딩 대회',
-  '청년창업진흥원',
-  '오후 실전 투자 세션 (본선)',
+  'evt-2026-fall-01',
+  '2026 대한민국 대학생 창업·창작 프로젝트 데모데이',
+  '서울혁신대학교',
+  '제3회 정기 데모데이',
   CURRENT_DATE,
   10000,
   2000,
   5000,
   'FUNDING_OPEN',
   false
-)
-ON CONFLICT (id) DO NOTHING;
+);
 
--- 테스트 계정 2개 등록 (김철수 학생, 박평가 심사위원)
+INSERT INTO public.teams (id, event_id, team_number, name)
+VALUES 
+  ('team-01', 'evt-2026-fall-01', 1, '뉴로보이스 (Team 01)'),
+  ('team-02', 'evt-2026-fall-01', 2, '에코루프 (Team 02)');
+
 INSERT INTO public.users (id, event_id, email, password, name, institution, department, student_number, team_id, team_name, role, privacy_agreed)
 VALUES
 (
-  'user-test-student',
-  'event-main',
-  'student1@startup.kr',
+  'user-student-1',
+  'evt-2026-fall-01',
+  'student1@gmail.com',
   'password123',
-  '김철수',
-  '한국대학교',
+  '임종락',
+  '서울혁신대학교',
   '컴퓨터공학과',
-  '20241234',
-  'team-eco',
-  '1조 에코패키징',
+  '2021-14022',
+  'team-01',
+  '뉴로보이스 (Team 01)',
   'STUDENT',
   true
 ),
 (
-  'user-test-judge',
-  'event-main',
-  'judge1@startup.kr',
+  'user-admin-1',
+  'evt-2026-fall-01',
+  'admin@gmail.com',
   'password123',
-  '박평가',
-  '벤처캐피탈 파트너스',
-  '수석심사역',
-  'JUDGE-001',
+  '총괄 관리자',
+  '창업교육센터',
+  '운영총괄',
+  'ADMIN-00',
   NULL,
   NULL,
-  'JUDGE',
+  'ADMIN',
   true
-)
-ON CONFLICT (email) DO NOTHING;
+);
 
--- 샘플 프로젝트 2개 등록
 INSERT INTO public.projects (
   id, event_id, team_id, team_name, team_number, title, summary, description,
   thumbnail_url, landing_format, landing_url, landing_images,
@@ -229,47 +210,46 @@ INSERT INTO public.projects (
 )
 VALUES
 (
-  'proj-1',
-  'event-main',
-  'team-eco',
-  '1조 에코패키징',
+  'proj-01',
+  'evt-2026-fall-01',
+  'team-01',
+  '뉴로보이스 (Team 01)',
   1,
-  '버섯 균사체 기반 100% 생분해 친환경 완충 포장재',
-  '스티로폼을 완벽 대체하는 30일 자연 생분해 패키징 솔루션',
-  '기존 스티로폼 완충재는 분해에 500년 이상 소요되며 미세플라스틱을 유발합니다. 저희 1조 에코패키징은 농업 부산물과 버섯 균사체를 결합하여 30일 만에 토양에서 퇴비화되는 고강도 친환경 완충재를 개발했습니다.',
-  'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&q=80',
+  '뉴로보이스 (NeuroVoice) — 신경 뇌파 기반 실시간 음성 합성 디바이스',
+  '루게릭병 및 발화 장애인을 위한 비침습적 초소형 이어셋과 온디바이스 생성 AI 보조공학 솔루션',
+  '인간의 의사소통 권리는 어떤 순간에도 박탈되어서는 안 됩니다. 뉴로보이스는 성대를 사용할 수 없는 근위축성 측삭경화증 환자 및 성대 절제 수술 환자를 위해, 귀 뒤에서 측정되는 미세한 뇌파와 안면 근전도 신호를 98.4%의 정확도로 해석합니다.',
+  'https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1200&q=80',
   'IMAGE',
-  'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1600&q=80',
-  '["https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
-  'user-test-student',
-  '김철수',
-  'student1@startup.kr',
-  '김철수 (팀 대표)',
+  'https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1600&q=80',
+  '["https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
+  'user-student-1',
+  '임종락',
+  'student1@gmail.com',
+  '임종락',
   to_char(now(), 'YYYY-MM-DD HH24:MI'),
   false,
-  7000,
+  6000,
   2
 ),
 (
-  'proj-2',
-  'event-main',
-  'team-care',
-  '2조 AI 헬스케어',
+  'proj-02',
+  'evt-2026-fall-01',
+  'team-02',
+  '에코루프 (Team 02)',
   2,
-  '비접촉 레이더 센서 기반 독거노인 응급 모니터링 시스템',
-  '카메라 프라이버시 침해 없이 호흡·심박·낙상을 실시간 감지하는 스마트 케어',
-  '독거노인 고독사 및 낙상 사고를 예방하기 위해 고주파 초광대역 레이더 센서를 활용하여 벽이나 장애물을 투과해 생체 신호를 감지합니다.',
-  'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80',
+  '에코루프 (EcoLoop) — 건설 폐플라스틱 업사이클링 초경량 단열 방수 블록',
+  '산업 폐기물 92% 재활용, 기존 콘크리트 대비 60% 경량화 및 탄소배출 74% 감축 패시브 건축자재',
+  '도시 재생 및 제로에너지 건축물 인증을 위한 혁신 업사이클링 솔루션입니다. 열전도율 0.028W/mK로 에너지 효율을 극대화합니다.',
+  'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1200&q=80',
   'IMAGE',
-  'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80',
-  '["https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
-  'user-test-student',
-  '이영희',
-  'younghee@startup.kr',
-  '이영희 (팀 대표)',
+  'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1600&q=80',
+  '["https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=1600&q=80", "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1600&q=80"]'::jsonb,
+  'user-student-1',
+  '박서연',
+  'seoyeon@gmail.com',
+  '박서연',
   to_char(now(), 'YYYY-MM-DD HH24:MI'),
   false,
-  5000,
+  4000,
   1
-)
-ON CONFLICT (id) DO NOTHING;
+);
