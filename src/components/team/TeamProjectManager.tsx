@@ -28,7 +28,7 @@ export const TeamProjectManager: React.FC = () => {
     );
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLocked) {
       alert("펀딩 단계가 시작된 이후에는 평가의 공정성을 위해 프로젝트를 수정할 수 없습니다.");
@@ -36,7 +36,7 @@ export const TeamProjectManager: React.FC = () => {
     }
 
     if (myTeamProject) {
-      updateProject({
+      await updateProject({
         id: myTeamProject.id,
         title,
         summary,

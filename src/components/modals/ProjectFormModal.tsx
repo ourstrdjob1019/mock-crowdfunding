@@ -92,9 +92,11 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       const res = await uploadThumbnail(file);
       if (res.url) {
         setThumbnailUrl(res.url);
+      } else if (res.error) {
+        setErrorMessage(`⚠️ Storage 업로드 실패: ${res.error} (제공된 fix_all.sql 실행 후 다시 시도해 주세요. 현재는 로컬 미리보기로 저장됩니다)`);
       }
-    } catch {
-      // 로컬 base64 유지
+    } catch (err: any) {
+      setErrorMessage(`⚠️ 업로드 중 예외 발생: ${err.message || err}`);
     } finally {
       setUploadStatus("");
     }
@@ -105,7 +107,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setUploadStatus("상세 이미지 로딩 중...");
+    setUploadStatus("상세 이미지 로딩 및 업로드 중...");
     const newImageUrls: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -122,6 +124,8 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
         const res = await uploadLandingFile(file);
         if (res.url) {
           newImageUrls[newImageUrls.length - 1] = res.url;
+        } else if (res.error) {
+          setErrorMessage(`⚠️ 상세이미지 Storage 업로드 오류: ${res.error}`);
         }
       } catch {
         // base64 유지
@@ -153,15 +157,17 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       const res = await uploadLandingFile(file);
       if (res.url) {
         setLandingUrl(res.url);
+      } else if (res.error) {
+        setErrorMessage(`⚠️ PDF Storage 업로드 오류: ${res.error}`);
       }
-    } catch {
-      // base64 유지
+    } catch (err: any) {
+      setErrorMessage(`⚠️ PDF 업로드 예외: ${err.message}`);
     } finally {
       setUploadStatus("");
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -201,52 +207,57 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
 
     setIsSubmitting(true);
 
-    if (isEditing && editProject) {
-      const res = updateProject({
-        id: editProject.id,
-        title: title.trim(),
-        teamName: teamName.trim() || editProject.teamName,
-        summary: summary.trim(),
-        description: description.trim(),
-        thumbnailUrl: thumbnailUrl.trim(),
-        landingFormat,
-        landingUrl: finalLandingUrl,
-        landingImages: finalLandingImages,
-      });
+    try {
+      if (isEditing && editProject) {
+        const res = await updateProject({
+          id: editProject.id,
+          title: title.trim(),
+          teamName: teamName.trim() || editProject.teamName,
+          summary: summary.trim(),
+          description: description.trim(),
+          thumbnailUrl: thumbnailUrl.trim(),
+          landingFormat,
+          landingUrl: finalLandingUrl,
+          landingImages: finalLandingImages,
+        });
 
-      setIsSubmitting(false);
-      if (!res.success) {
-        setErrorMessage(res.message);
+        setIsSubmitting(false);
+        if (!res.success) {
+          setErrorMessage(res.message);
+        } else {
+          onClose();
+        }
       } else {
-        onClose();
-      }
-    } else {
-      const res = createProject({
-        teamId: currentUser?.teamId || `team-${Date.now().toString().slice(-4)}`,
-        teamName: teamName.trim() || `${currentUser?.name} 팀`,
-        teamNumber: 1, // AppContext에서 자동 계산
-        title: title.trim(),
-        summary: summary.trim(),
-        description: description.trim(),
-        thumbnailUrl: thumbnailUrl.trim(),
-        landingFormat,
-        landingUrl: finalLandingUrl,
-        landingImages: finalLandingImages,
-      });
+        const res = await createProject({
+          teamId: currentUser?.teamId || `team-${Date.now().toString().slice(-4)}`,
+          teamName: teamName.trim() || `${currentUser?.name} 팀`,
+          teamNumber: 1, // AppContext에서 자동 계산
+          title: title.trim(),
+          summary: summary.trim(),
+          description: description.trim(),
+          thumbnailUrl: thumbnailUrl.trim(),
+          landingFormat,
+          landingUrl: finalLandingUrl,
+          landingImages: finalLandingImages,
+        });
 
-      setIsSubmitting(false);
-      if (!res.success) {
-        setErrorMessage(res.message);
-      } else {
-        onClose();
+        setIsSubmitting(false);
+        if (!res.success) {
+          setErrorMessage(res.message);
+        } else {
+          onClose();
+        }
       }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage(err.message || "프로젝트 저장 중 오류가 발생했습니다.");
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!editProject) return;
     if (confirm("정말로 이 프로젝트를 삭제하시겠습니까? 관련 펀딩 내역도 함께 정리됩니다.")) {
-      const res = deleteProject(editProject.id);
+      const res = await deleteProject(editProject.id);
       if (res.success) {
         onClose();
       } else {

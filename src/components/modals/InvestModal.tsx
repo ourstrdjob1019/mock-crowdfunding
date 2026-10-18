@@ -45,7 +45,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
     setAmount(next);
   };
 
-  const handleInvestSubmit = (e: React.FormEvent) => {
+  const handleInvestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -54,7 +54,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
       return;
     }
 
-    const result = invest(project.id, amount);
+    const result = await invest(project.id, amount);
     if (!result.success) {
       setErrorMessage(result.message);
       return;

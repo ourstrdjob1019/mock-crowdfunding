@@ -94,8 +94,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ openProjectorRan
   };
 
   // 비밀번호 리셋 실행 및 8자리 난수 발급
-  const handlePasswordReset = (userId: string, userName: string, userEmail: string) => {
-    const res = resetPassword(userId);
+  const handlePasswordReset = async (userId: string, userName: string, userEmail: string) => {
+    const res = await resetPassword(userId);
     if (res.success && res.tempPassword) {
       setResetModalData({
         userName,

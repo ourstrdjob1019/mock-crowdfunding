@@ -59,9 +59,9 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const fundingRate = Math.round((project.totalCredits / targetGoalCredits) * 100);
   const projectSupporters = investments.filter((inv) => inv.projectId === project.id);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirm("정말로 이 프로젝트를 삭제하시겠습니까?")) {
-      const res = deleteProject(project.id);
+      const res = await deleteProject(project.id);
       if (res.success) {
         onClose();
       } else {

@@ -47,7 +47,7 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
@@ -57,7 +57,7 @@ export const AuthScreen: React.FC = () => {
       teamName = foundProject?.teamName;
     }
 
-    const res = register({
+    const res = await register({
       email: regEmail,
       password: regPassword,
       name: regName,

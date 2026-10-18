@@ -3,6 +3,16 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Event, Project, User, Investment, EventStage, RosterItem, UserRole } from "@/types";
 import { INITIAL_EVENT, INITIAL_USERS, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_ROSTER } from "@/lib/mockData";
+import {
+  fetchAllFromSupabase,
+  dbInsertUser,
+  dbResetPassword,
+  dbInsertProject,
+  dbUpdateProject,
+  dbDeleteProject,
+  dbSaveInvestment,
+  dbUpdateEvent,
+} from "@/lib/supabaseService";
 import confetti from "canvas-confetti";
 
 export interface RegisterFormData {
@@ -28,24 +38,26 @@ interface AppContextType {
   investments: Investment[];
   remainingCredits: number;
   usedCredits: number;
+  isLoading: boolean;
   login: (email: string, password: string) => { success: boolean; message: string };
   demoLogin: (userId: string) => void;
-  register: (data: RegisterFormData) => { success: boolean; message: string };
-  resetPassword: (userId: string) => { success: boolean; tempPassword?: string; message: string };
+  register: (data: RegisterFormData) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (userId: string) => Promise<{ success: boolean; tempPassword?: string; message: string }>;
   logout: () => void;
   setCurrentUser: (user: User) => void;
-  setStage: (stage: EventStage) => void;
-  toggleRankingPublic: () => void;
-  toggleProjectVisibility: (projectId: string) => void;
-  invest: (projectId: string, amount: number) => { success: boolean; message: string };
+  setStage: (stage: EventStage) => Promise<void>;
+  toggleRankingPublic: () => Promise<void>;
+  toggleProjectVisibility: (projectId: string) => Promise<void>;
+  invest: (projectId: string, amount: number) => Promise<{ success: boolean; message: string }>;
   getUserInvestmentForProject: (projectId: string) => Investment | undefined;
   getUserTotalInvestments: () => Investment[];
   createProject: (
     data: Omit<Project, "id" | "totalCredits" | "investorCount" | "lastModifierName" | "lastModifiedAt" | "isHidden">
-  ) => { success: boolean; project?: Project; message: string };
-  updateProject: (project: Partial<Project> & { id: string }) => { success: boolean; message: string };
-  deleteProject: (projectId: string) => { success: boolean; message: string };
+  ) => Promise<{ success: boolean; project?: Project; message: string }>;
+  updateProject: (project: Partial<Project> & { id: string }) => Promise<{ success: boolean; message: string }>;
+  deleteProject: (projectId: string) => Promise<{ success: boolean; message: string }>;
   resetAllData: () => void;
+  refreshFromSupabase: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -58,61 +70,105 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
   const [investments, setInvestments] = useState<Investment[]>(INITIAL_INVESTMENTS);
-
-  // 로컬 스토리지 동기화 (버전 체크를 통한 최신 2개 프로젝트/계정 강제 초기화 및 유지)
-  useEffect(() => {
-    const currentVersion = "v4_two_accounts_and_projects";
-    const savedVersion = localStorage.getItem("mc_data_version");
-
-    if (savedVersion !== currentVersion) {
-      localStorage.setItem("mc_data_version", currentVersion);
-      localStorage.setItem("mc_projects", JSON.stringify(INITIAL_PROJECTS));
-      localStorage.setItem("mc_users", JSON.stringify(INITIAL_USERS));
-      localStorage.setItem("mc_investments", JSON.stringify(INITIAL_INVESTMENTS));
-      setProjects(INITIAL_PROJECTS);
-      setUsers(INITIAL_USERS);
-      setInvestments(INITIAL_INVESTMENTS);
-
-      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
-      if (savedCurrentUserId) {
-        const found = INITIAL_USERS.find((u) => u.id === savedCurrentUserId);
-        if (found) {
-          setCurrentUserState(found);
-          setIsLoggedIn(true);
-        }
-      }
-    } else {
-      const savedEvent = localStorage.getItem("mc_event");
-      const savedProjects = localStorage.getItem("mc_projects");
-      const savedInvestments = localStorage.getItem("mc_investments");
-      const savedUsers = localStorage.getItem("mc_users");
-      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
-
-      if (savedEvent) setEventState(JSON.parse(savedEvent));
-      if (savedProjects) setProjects(JSON.parse(savedProjects));
-      if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
-      if (savedUsers) setUsers(JSON.parse(savedUsers));
-
-      if (savedCurrentUserId) {
-        const allUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-        const found = allUsers.find((u: User) => u.id === savedCurrentUserId);
-        if (found) {
-          setCurrentUserState(found);
-          setIsLoggedIn(true);
-        }
-      }
-    }
-  }, []);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
-    localStorage.setItem("mc_data_version", "v4_two_accounts_and_projects");
-    localStorage.setItem("mc_event", JSON.stringify(newEvent));
-    localStorage.setItem("mc_projects", JSON.stringify(newProjects));
-    localStorage.setItem("mc_investments", JSON.stringify(newInvestments));
-    localStorage.setItem("mc_users", JSON.stringify(newUsers));
+    try {
+      localStorage.setItem("mc_data_version", "v5_supabase_sync");
+      localStorage.setItem("mc_event", JSON.stringify(newEvent));
+      localStorage.setItem("mc_projects", JSON.stringify(newProjects));
+      localStorage.setItem("mc_investments", JSON.stringify(newInvestments));
+      localStorage.setItem("mc_users", JSON.stringify(newUsers));
+    } catch (e) {
+      console.warn("Local storage save failed:", e);
+    }
   };
 
-  // 로그인 로직 (실제 저장된 비밀번호 또는 8자리 임시 비밀번호 검증)
+  // Supabase 실시간 데이터 로딩 함수
+  const loadData = async () => {
+    setIsLoading(true);
+
+    // 1차: 로컬스토리지 캐시 우선 로드 (빠른 초기 렌더링)
+    const savedProjects = localStorage.getItem("mc_projects");
+    const savedInvestments = localStorage.getItem("mc_investments");
+    const savedUsers = localStorage.getItem("mc_users");
+    const savedEvent = localStorage.getItem("mc_event");
+    const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+
+    let currentUsersList = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+    if (savedProjects) setProjects(JSON.parse(savedProjects));
+    if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
+    if (savedUsers) setUsers(currentUsersList);
+    if (savedEvent) setEventState(JSON.parse(savedEvent));
+
+    if (savedCurrentUserId) {
+      const found = currentUsersList.find((u: User) => u.id === savedCurrentUserId);
+      if (found) {
+        setCurrentUserState(found);
+        setIsLoggedIn(true);
+      }
+    }
+
+    // 2차: Supabase DB 조회하여 병합 및 동기화
+    try {
+      const supaData = await fetchAllFromSupabase();
+      if (!supaData.error) {
+        if (supaData.projects && supaData.projects.length > 0) {
+          setProjects(supaData.projects);
+        }
+        if (supaData.users && supaData.users.length > 0) {
+          // 기존 Mock 데이터와 Supabase 등록 유저 병합 (중복 이메일 제거)
+          const mergedUsers = [...INITIAL_USERS];
+          for (const su of supaData.users) {
+            const idx = mergedUsers.findIndex((u) => u.email.toLowerCase() === su.email.toLowerCase());
+            if (idx >= 0) {
+              mergedUsers[idx] = su;
+            } else {
+              mergedUsers.push(su);
+            }
+          }
+          setUsers(mergedUsers);
+          currentUsersList = mergedUsers;
+
+          if (savedCurrentUserId) {
+            const found = mergedUsers.find((u) => u.id === savedCurrentUserId);
+            if (found) {
+              setCurrentUserState(found);
+              setIsLoggedIn(true);
+            }
+          }
+        }
+        if (supaData.investments && supaData.investments.length > 0) {
+          setInvestments(supaData.investments);
+        }
+        if (supaData.event) {
+          setEventState(supaData.event);
+        }
+
+        // 로컬스토리지 갱신
+        saveToStorage(
+          supaData.event || event,
+          supaData.projects.length > 0 ? supaData.projects : projects,
+          supaData.investments.length > 0 ? supaData.investments : investments,
+          currentUsersList
+        );
+      }
+    } catch (err) {
+      console.warn("Supabase initial fetch failed, using local cache:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refreshFromSupabase = async () => {
+    await loadData();
+  };
+
+  // 로그인 로직
   const login = (email: string, password: string): { success: boolean; message: string } => {
     const trimmedEmail = email.trim().toLowerCase();
     const user = users.find((u) => u.email.toLowerCase() === trimmedEmail);
@@ -128,7 +184,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "비밀번호를 입력해 주세요." };
     }
 
-    // 비밀번호 체크 (설정된 비밀번호가 있으면 일치 여부 확인)
     if (user.password && user.password !== password) {
       return {
         success: false,
@@ -152,8 +207,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 자유로운 회원가입 (사전 명단 제한 없이 누구나 가입 가능)
-  const register = (data: RegisterFormData): { success: boolean; message: string } => {
+  // 회원가입 (Supabase DB + LocalStorage 동시 저장)
+  const register = async (data: RegisterFormData): Promise<{ success: boolean; message: string }> => {
     const trimmedEmail = data.email.trim().toLowerCase();
 
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
@@ -169,7 +224,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "개인정보 수집 및 이용 동의가 필요합니다." };
     }
 
-    // 명단에 있는 경우 명단 정보 연계, 없더라도 자유롭게 설정된 정보로 가입
     const rosterMatch = roster.find((r) => r.email.toLowerCase() === trimmedEmail);
     const assignedRole: UserRole = data.role || rosterMatch?.role || "STUDENT";
     const assignedTeamId = data.teamId !== undefined ? data.teamId : rosterMatch?.teamId;
@@ -186,10 +240,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       role: assignedRole,
       teamId: assignedTeamId || undefined,
       teamName: assignedTeamName || undefined,
-      eventId: event.id,
+      eventId: event.id || "event-main",
       privacyAgreed: true,
     };
 
+    // 1. Supabase DB에 저장 시도
+    await dbInsertUser(newUser);
+
+    // 2. 로컬 상태 및 스토리지 업데이트
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
     setCurrentUserState(newUser);
@@ -209,17 +267,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  // 관리자 기능: 임의의 숫자 8자리 비밀번호 자동 생성 및 계정 갱신
-  const resetPassword = (userId: string): { success: boolean; tempPassword?: string; message: string } => {
+  // 관리자 기능: 비밀번호 리셋 (Supabase DB + LocalStorage)
+  const resetPassword = async (userId: string): Promise<{ success: boolean; tempPassword?: string; message: string }> => {
     const targetUser = users.find((u) => u.id === userId);
     if (!targetUser) {
       return { success: false, message: "해당 사용자를 찾을 수 없습니다." };
     }
 
-    // 8자리 랜덤 숫자 생성 (예: 10000000 ~ 99999999)
     const tempPassword = Math.floor(10000000 + Math.random() * 90000000).toString();
 
-    // 해당 유저의 비밀번호를 임시 비밀번호로 갱신
+    // Supabase DB 갱신
+    await dbResetPassword(userId, tempPassword);
+
     const updatedUsers = users.map((u) =>
       u.id === userId ? { ...u, password: tempPassword } : u
     );
@@ -261,11 +320,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return userInvestments;
   };
 
-  const setStage = (stage: EventStage) => {
+  const setStage = async (stage: EventStage) => {
     const isPublic = stage === "RANKING_PUBLISHED";
     const updated = { ...event, currentStage: stage, isRankingPublic: isPublic };
     setEventState(updated);
     saveToStorage(updated, projects, investments, users);
+    await dbUpdateEvent(updated);
 
     if (isPublic) {
       confetti({
@@ -276,24 +336,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const toggleRankingPublic = () => {
+  const toggleRankingPublic = async () => {
     const updated = { ...event, isRankingPublic: !event.isRankingPublic };
     setEventState(updated);
     saveToStorage(updated, projects, investments, users);
+    await dbUpdateEvent(updated);
   };
 
-  const toggleProjectVisibility = (projectId: string) => {
+  const toggleProjectVisibility = async (projectId: string) => {
     const updatedProjects = projects.map((p) =>
       p.id === projectId ? { ...p, isHidden: !p.isHidden } : p
     );
+    const target = updatedProjects.find((p) => p.id === projectId);
     setProjects(updatedProjects);
     saveToStorage(event, updatedProjects, investments, users);
+    if (target) {
+      await dbUpdateProject(projectId, { isHidden: target.isHidden });
+    }
   };
 
-  // 1. 새 프로젝트 등록 (학생/유저 출품 글쓰기 기능)
-  const createProject = (
+  // 1. 새 프로젝트 등록 (Supabase DB + LocalStorage)
+  const createProject = async (
     data: Omit<Project, "id" | "totalCredits" | "investorCount" | "lastModifierName" | "lastModifiedAt" | "isHidden">
-  ): { success: boolean; project?: Project; message: string } => {
+  ): Promise<{ success: boolean; project?: Project; message: string }> => {
     if (!currentUser) {
       return { success: false, message: "로그인이 필요합니다." };
     }
@@ -302,6 +367,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newProject: Project = {
       ...data,
       id: newId,
+      teamId: data.teamId || `team-${Date.now()}`,
       teamNumber: data.teamNumber || projects.length + 1,
       totalCredits: 0,
       investorCount: 0,
@@ -313,6 +379,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       authorEmail: currentUser.email,
     };
 
+    // 1. Supabase DB 저장
+    const dbRes = await dbInsertProject(newProject);
+    if (!dbRes.success) {
+      console.warn("[AppContext] Supabase DB insert failed:", dbRes.error);
+    }
+
+    // 2. 로컬 상태 업데이트
     const updatedProjects = [newProject, ...projects];
     setProjects(updatedProjects);
     saveToStorage(event, updatedProjects, investments, users);
@@ -330,8 +403,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  // 2. 프로젝트 수정 (작성자 본인 또는 관리자만 수정 가능)
-  const updateProject = (updatedFields: Partial<Project> & { id: string }): { success: boolean; message: string } => {
+  // 2. 프로젝트 수정 (Supabase DB + LocalStorage)
+  const updateProject = async (updatedFields: Partial<Project> & { id: string }): Promise<{ success: boolean; message: string }> => {
     if (!currentUser) {
       return { success: false, message: "로그인이 필요합니다." };
     }
@@ -347,13 +420,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "본인이 작성한 프로젝트만 수정할 수 있습니다." };
     }
 
+    const fullUpdates = {
+      ...updatedFields,
+      lastModifierName: currentUser.name,
+      lastModifiedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
+    };
+
+    // Supabase DB 갱신
+    await dbUpdateProject(updatedFields.id, fullUpdates);
+
     const updatedProjects = projects.map((p) =>
       p.id === updatedFields.id
         ? {
             ...p,
-            ...updatedFields,
-            lastModifierName: currentUser.name,
-            lastModifiedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
+            ...fullUpdates,
           }
         : p
     );
@@ -363,8 +443,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true, message: "프로젝트가 성공적으로 수정되었습니다." };
   };
 
-  // 3. 프로젝트 삭제 (작성자 본인 또는 관리자만 삭제 가능)
-  const deleteProject = (projectId: string): { success: boolean; message: string } => {
+  // 3. 프로젝트 삭제 (Supabase DB + LocalStorage)
+  const deleteProject = async (projectId: string): Promise<{ success: boolean; message: string }> => {
     if (!currentUser) {
       return { success: false, message: "로그인이 필요합니다." };
     }
@@ -380,6 +460,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "본인이 작성한 프로젝트만 삭제할 수 있습니다." };
     }
 
+    // Supabase DB 삭제
+    await dbDeleteProject(projectId);
+
     const updatedProjects = projects.filter((p) => p.id !== projectId);
     const updatedInvestments = investments.filter((inv) => inv.projectId !== projectId);
 
@@ -390,7 +473,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true, message: "프로젝트가 삭제되었습니다." };
   };
 
-  const invest = (projectId: string, amount: number): { success: boolean; message: string } => {
+  // 4. 펀딩 투자 (Supabase DB + LocalStorage)
+  const invest = async (projectId: string, amount: number): Promise<{ success: boolean; message: string }> => {
     if (!currentUser) {
       return { success: false, message: "로그인이 필요합니다." };
     }
@@ -430,17 +514,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    let targetInvestment: Investment;
     let newInvestments: Investment[];
     if (existingInvestment) {
+      targetInvestment = {
+        ...existingInvestment,
+        amount,
+        updatedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
+      };
       newInvestments = investments.map((inv) =>
-        inv.id === existingInvestment.id
-          ? { ...inv, amount, updatedAt: new Date().toISOString().replace("T", " ").substring(0, 16) }
-          : inv
+        inv.id === existingInvestment.id ? targetInvestment : inv
       );
     } else {
-      const newInv: Investment = {
+      targetInvestment = {
         id: `inv-${Date.now()}`,
-        eventId: event.id,
+        eventId: event.id || "event-main",
         investorId: currentUser.id,
         investorName: currentUser.name,
         projectId,
@@ -449,17 +537,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString().replace("T", " ").substring(0, 16),
         updatedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
       };
-      newInvestments = [...investments, newInv];
+      newInvestments = [...investments, targetInvestment];
     }
 
+    // 프로젝트 총액 및 투자자 수 계산
+    const projInvestments = newInvestments.filter((inv) => inv.projectId === projectId);
+    const projTotal = projInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+    const projInvestors = projInvestments.length;
+
+    // Supabase DB 저장
+    await dbSaveInvestment(targetInvestment, projTotal, projInvestors);
+
     const updatedProjects = projects.map((p) => {
-      const projInvestments = newInvestments.filter((inv) => inv.projectId === p.id);
-      const total = projInvestments.reduce((sum, inv) => sum + inv.amount, 0);
-      return {
-        ...p,
-        totalCredits: total,
-        investorCount: projInvestments.length,
-      };
+      if (p.id === projectId) {
+        return {
+          ...p,
+          totalCredits: projTotal,
+          investorCount: projInvestors,
+        };
+      }
+      return p;
     });
 
     setInvestments(newInvestments);
@@ -500,6 +597,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         investments,
         remainingCredits,
         usedCredits,
+        isLoading,
         login,
         demoLogin,
         register,
@@ -516,6 +614,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateProject,
         deleteProject,
         resetAllData,
+        refreshFromSupabase,
       }}
     >
       {children}
