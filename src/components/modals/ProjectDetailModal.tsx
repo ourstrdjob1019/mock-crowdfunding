@@ -20,6 +20,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { PdfDetailViewer } from "@/components/ui/PdfDetailViewer";
 
 const formatWebUrl = (url?: string): string => {
   if (!url) return "";
@@ -293,45 +294,14 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                 </div>
               )}
 
-              {/* 2. PDF FORMAT: 실제 업로드된 PDF 파일 임베드 뷰어 */}
+              {/* 2. PDF FORMAT: 한 페이지씩 상세 슬라이드 및 세로 연속 뷰어 */}
               {project.landingFormat === "PDF" && (
-                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs space-y-3">
-                  {/* PDF 상단 컨트롤 바 */}
-                  <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-indigo-600" />
-                      <span className="font-bold text-xs text-slate-800">
-                        출품 IR 피치덱 문서 (PDF)
-                      </span>
-                    </div>
-
-                    {project.landingUrl && (
-                      <a
-                        href={project.landingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>새 탭에서 전체화면 보기 / 다운로드</span>
-                      </a>
-                    )}
-                  </div>
-
-                  {/* 실제 PDF 파일 렌더링 */}
+                <div className="w-full">
                   {project.landingUrl ? (
-                    <div className="p-2 sm:p-3 space-y-2">
-                      <div className="relative w-full h-[550px] sm:h-[720px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-inner">
-                        <iframe
-                          src={`${project.landingUrl}#toolbar=1&navpanes=1`}
-                          title={`${project.title} PDF Document`}
-                          className="w-full h-full border-0"
-                        />
-                      </div>
-                      <p className="text-[11px] text-slate-500 text-center py-1">
-                        ※ 브라우저나 모바일 기기에 따라 인앱 뷰어가 제한될 경우 상단의 [새 탭에서 전체화면 보기]를 눌러 열람하세요.
-                      </p>
-                    </div>
+                    <PdfDetailViewer
+                      url={project.landingUrl}
+                      title={`${project.title} - 출품 IR 피치덱`}
+                    />
                   ) : (
                     /* Fallback: 가상 슬라이드 뷰어 */
                     <div className="rounded-xl border border-slate-200 bg-slate-900 text-white p-5 space-y-4 m-3">
