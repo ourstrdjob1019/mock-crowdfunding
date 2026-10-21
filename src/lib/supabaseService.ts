@@ -385,3 +385,26 @@ export async function dbUpdateEvent(event: Event): Promise<{ success: boolean; e
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * 투자 삭제 / 취소 및 프로젝트 누적액 복구 (Supabase DB)
+ */
+export async function dbDeleteInvestment(
+  investmentId: string,
+  projectId: string,
+  newProjectTotal: number,
+  newInvestorCount: number
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: "Supabase not configured" };
+  try {
+    await supabase.from("investments").delete().eq("id", investmentId);
+    await supabase.from("projects").update({
+      total_credits: newProjectTotal,
+      investor_count: newInvestorCount,
+    }).eq("id", projectId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+

@@ -1,162 +1,174 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { Project } from "@/types";
-import { Button } from "@/components/ui/Button";
-import { Wallet, Edit3, ArrowRight, CheckCircle2, CreditCard } from "lucide-react";
+import { TrendingUp, Briefcase, Coins, RotateCcw } from "lucide-react";
 
 interface MyInvestmentsViewProps {
-  onEditInvestment: (project: Project) => void;
+  onEditInvestment?: (project: Project) => void;
   onExploreGallery: () => void;
 }
 
 export const MyInvestmentsView: React.FC<MyInvestmentsViewProps> = ({
-  onEditInvestment,
   onExploreGallery,
 }) => {
-  const { currentUser, event, remainingCredits, usedCredits, getUserTotalInvestments, projects } = useApp();
-  const myInvestments = getUserTotalInvestments();
+  const {
+    currentUser,
+    remainingCredits,
+    usedCredits,
+    getUserTotalInvestments,
+    projects,
+    cancelInvestment,
+  } = useApp();
+
+  const [cancelNotice, setCancelNotice] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
+  const myInvestments = getUserTotalInvestments();
+
+  const handleCancel = async (invId: string) => {
+    if (confirm("정말로 이 투자를 취소(환불)하시겠습니까?")) {
+      const res = await cancelInvestment(invId);
+      setCancelNotice(res.message);
+      setTimeout(() => setCancelNotice(null), 3000);
+    }
+  };
+
   return (
-    <div className="space-y-8">
-      {/* 상단 타이틀 & 크레딧 카드 */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-6 md:p-8 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-slate-100">
+    <div className="flex flex-col gap-6">
+      
+      {/* Toast Notice */}
+      {cancelNotice && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[70] px-5 py-2.5 rounded-2xl bg-slate-900 text-white border border-slate-700 shadow-2xl text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+          <span>{cancelNotice}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">내 모의투자 포트폴리오</h1>
+        <p className="text-xs sm:text-sm text-slate-500 mt-1">
+          2026 데모데이 출품작에 참여한 모의투자 내역입니다. 펀딩 진행 중 단계에서는 자유롭게 투자를 취소(환불)할 수 있습니다.
+        </p>
+      </div>
+
+      {/* 3 Stat KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-mono text-[11px] font-bold uppercase tracking-wider mb-2">
-              <CreditCard size={12} /> PORTFOLIO STATEMENT
-            </div>
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-slate-900 tracking-tight">
-              내 가상 자본 투자 포트폴리오
-            </h2>
-            <p className="text-sm text-slate-600 mt-1.5">
-              투자자: <strong className="text-slate-900">{currentUser.name}</strong> ({currentUser.email}) · {currentUser.department}
+            <p className="text-xs font-semibold text-slate-500">총 투자 크레딧</p>
+            <p className="text-2xl font-extrabold font-mono text-blue-600 mt-1">
+              {usedCredits.toLocaleString()} <span className="text-xs font-sans text-slate-500">CR</span>
             </p>
           </div>
-
-          <div className="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 min-w-[280px] shadow-md relative overflow-hidden">
-            <div className="flex justify-between items-center text-xs font-mono text-slate-400 uppercase pb-1 border-b border-slate-700/60">
-              <span>기본 자본금</span>
-              <span>{event.baseCredit.toLocaleString()} CR</span>
-            </div>
-            <div className="mt-3 flex justify-between items-baseline">
-              <span className="text-xs font-mono text-slate-400">잔여 투자 가능액</span>
-              <span className="text-2xl font-mono font-bold text-blue-400">
-                {remainingCredits.toLocaleString()} <span className="text-xs font-normal">CR</span>
-              </span>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-700/60 flex justify-between text-xs font-mono text-slate-400">
-              <span>투자 완료: {myInvestments.length}팀</span>
-              <span>누적 투입: {usedCredits.toLocaleString()} CR</span>
-            </div>
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <TrendingUp className="w-6 h-6" />
           </div>
         </div>
 
-        {/* 규칙 요약 안내 */}
-        <div className="pt-6 font-mono text-xs text-slate-500 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-            • <strong>투자 한도:</strong> 팀당 1회, 2,000 ~ 5,000 CR
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">참여 프로젝트 수</p>
+            <p className="text-2xl font-extrabold font-mono text-emerald-600 mt-1">
+              {myInvestments.length} <span className="text-xs font-sans text-slate-500">개 팀</span>
+            </p>
           </div>
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-            • <strong>금액 수정:</strong> 펀딩 마감 전까지 자율 수정 가능
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <Briefcase className="w-6 h-6" />
           </div>
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-            • <strong>잔여 크레딧:</strong> 잔여액을 전부 쓰지 않아도 무방
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">잔여 크레딧 잔액</p>
+            <p className="text-2xl font-extrabold font-mono text-slate-900 mt-1">
+              {remainingCredits.toLocaleString()} <span className="text-xs font-sans text-slate-500">CR</span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <Coins className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* 투자 목록 */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-6 md:p-8 shadow-sm">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-display font-bold text-slate-900">
-            투자 포트폴리오 목록 ({myInvestments.length}개 팀)
-          </h3>
-          <Button variant="outline" size="sm" onClick={onExploreGallery}>
-            더 많은 팀 둘러보기 <ArrowRight size={14} className="ml-1" />
-          </Button>
+      {/* Investments History Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-bold text-slate-900 text-sm">모의투자 내역 리스트</h2>
+          <span className="text-xs text-slate-400 font-mono">실시간 환불 보장 정책 적용</span>
         </div>
 
         {myInvestments.length === 0 ? (
-          <div className="py-16 text-center rounded-2xl border border-dashed border-slate-200 p-8">
-            <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-500 mx-auto flex items-center justify-center mb-3">
-              <Wallet size={28} />
-            </div>
-            <p className="font-display text-xl font-bold text-slate-900 mb-1">아직 투자한 프로젝트가 없습니다</p>
-            <p className="text-sm text-slate-500 mb-6">
-              프로젝트 갤러리에서 팀들의 결과물 랜딩페이지를 열람하고 마음에 드는 팀에 투자해 보세요.
-            </p>
-            <Button variant="primary" onClick={onExploreGallery}>
-              프로젝트 갤러리로 이동
-            </Button>
+          <div className="p-12 text-center text-slate-400 space-y-3">
+            <Coins className="w-12 h-12 mx-auto text-slate-300" />
+            <p className="text-sm font-medium text-slate-600">아직 투자한 프로젝트가 없습니다.</p>
+            <button
+              type="button"
+              onClick={onExploreGallery}
+              className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition cursor-pointer"
+            >
+              프로젝트 둘러보고 투자하기
+            </button>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {myInvestments.map((inv) => {
-              const proj = projects.find((p) => p.id === inv.projectId);
-              if (!proj) return null;
-
-              return (
-                <div
-                  key={inv.id}
-                  className="py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-slate-50/80 px-3 rounded-2xl transition-all"
-                >
-                  <div className="flex items-center space-x-4">
-                    <img
-                      src={proj.thumbnailUrl}
-                      alt={proj.title}
-                      className="w-20 h-14 object-cover rounded-xl border border-slate-200"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 uppercase">
-                          TEAM {String(proj.teamNumber).padStart(2, "0")}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">팀 / 프로젝트명</th>
+                  <th className="py-3 px-4">발표 형식</th>
+                  <th className="py-3 px-4">투자 일시</th>
+                  <th className="py-3 px-4 text-right">투자 크레딧</th>
+                  <th className="py-3 px-4 text-center">상태 / 조치</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {myInvestments.map((inv) => {
+                  const proj = projects.find((p) => p.id === inv.projectId);
+                  return (
+                    <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900">
+                          {proj ? proj.title : inv.projectId}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          <span className="text-blue-600 font-bold">
+                            {proj ? `Team ${String(proj.teamNumber).padStart(2, "0")}` : ""}
+                          </span>{" "}
+                          · {proj ? proj.teamName : inv.teamId}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                          {proj ? proj.landingFormat : "IMAGE"}
                         </span>
-                        <span className="font-mono text-xs text-slate-500 font-semibold">
-                          {proj.teamName}
-                        </span>
-                      </div>
-                      <h4 className="font-display font-bold text-base md:text-lg text-slate-900 leading-tight">
-                        {proj.title}
-                      </h4>
-                      <p className="font-mono text-[11px] text-slate-400 mt-1">
-                        투자 일시: {inv.createdAt} {inv.updatedAt !== inv.createdAt && `(수정됨: ${inv.updatedAt})`}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-6 self-end md:self-center">
-                    <div className="text-right font-mono">
-                      <span className="text-[11px] text-slate-400 uppercase block">투자 확정액</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        {inv.amount.toLocaleString()} <span className="text-xs font-normal text-slate-400">CR</span>
-                      </span>
-                    </div>
-
-                    {event.currentStage === "FUNDING_OPEN" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onEditInvestment(proj)}
-                        className="flex items-center gap-1.5"
-                      >
-                        <Edit3 size={13} /> 금액 수정
-                      </Button>
-                    ) : (
-                      <span className="font-mono text-xs text-slate-400">
-                        수정 마감됨
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-500">
+                        {inv.createdAt}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-blue-600 text-sm">
+                        {inv.amount.toLocaleString()} CR
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(inv.id)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] transition cursor-pointer"
+                        >
+                          투자 취소 (환불)
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
     </div>
   );
 };

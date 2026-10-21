@@ -30,5 +30,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "crowdfund---2026-대학-스타트업-데모데이-모의-크라우드펀딩-플랫폼"
+  ]
 }

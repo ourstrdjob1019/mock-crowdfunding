@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
-import { Button } from "@/components/ui/Button";
-import { Trophy, Users, X, Eye, EyeOff, Sparkles } from "lucide-react";
+import { Sparkles, X, Eye, EyeOff, Tv } from "lucide-react";
+import confetti from "canvas-confetti";
 
 interface RankingBoardProps {
   onClose: () => void;
@@ -12,219 +12,264 @@ interface RankingBoardProps {
 export const RankingBoard: React.FC<RankingBoardProps> = ({ onClose }) => {
   const { event, projects, toggleRankingPublic, currentUser } = useApp();
 
-  const [ratio, setRatio] = React.useState({ creditUnit: 1000, scorePerUnit: 10 });
-  React.useEffect(() => {
+  const [ratio, setRatio] = useState({ creditUnit: 1000, scorePerUnit: 10 });
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem("mc_score_ratio");
       if (saved) setRatio(JSON.parse(saved));
     } catch {}
   }, []);
 
-  const calculateScore = (credits: number) => {
-    if (!ratio.creditUnit || ratio.creditUnit <= 0) return 0;
-    return Math.round(((credits / ratio.creditUnit) * ratio.scorePerUnit) * 10) / 10;
+  const fireGrandConfetti = () => {
+    const end = Date.now() + 3 * 1000;
+    const colors = ["#F59E0B", "#FBBF24", "#06B6D4", "#3B82F6", "#8B5CF6", "#EC4899"];
+    (function frame() {
+      confetti({
+        particleCount: 8,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0 },
+        colors: colors,
+      });
+      confetti({
+        particleCount: 8,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1 },
+        colors: colors,
+      });
+      if (Date.now() < end) {
+        requestAnimationFrame(frame);
+      }
+    })();
   };
 
-  const sortedProjects = [...projects]
-    .filter((p) => !p.isHidden)
-    .sort((a, b) => {
-      if (b.totalCredits !== a.totalCredits) {
-        return b.totalCredits - a.totalCredits;
-      }
-      return b.investorCount - a.investorCount;
-    });
-
-  const totalFunded = projects.reduce((sum, p) => sum + p.totalCredits, 0);
+  const leaderboardData = useMemo(() => {
+    return [...projects]
+      .filter((p) => !p.isHidden)
+      .map((p) => {
+        const convertedPoints =
+          ratio.creditUnit > 0 ? (p.totalCredits / ratio.creditUnit) * ratio.scorePerUnit : 0;
+        return {
+          ...p,
+          convertedPoints: Number(convertedPoints.toFixed(1)),
+        };
+      })
+      .sort((a, b) => b.totalCredits - a.totalCredits);
+  }, [projects, ratio]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0F172A] text-white overflow-y-auto flex flex-col justify-between selection:bg-[#0052FF] selection:text-white relative">
-      {/* 도트 텍스처 오버레이 */}
-      <div className="fixed inset-0 pointer-events-none opacity-40 bg-dot-pattern-dark z-0" />
-      {/* 은은한 래디얼 글루 */}
-      <div className="fixed top-0 left-1/4 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[160px] pointer-events-none" />
-
-      {/* 상단 프로젝터 헤더 */}
-      <header className="relative z-10 border-b border-slate-800 px-6 md:px-12 py-6 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-2xl bg-accent-gradient flex items-center justify-center text-white shadow-accent">
-            <Trophy size={24} />
+    <div className="fixed inset-0 z-50 bg-[#0B0F19] text-white flex flex-col justify-between overflow-y-auto select-none">
+      
+      {/* Top Bar for Projector */}
+      <div className="p-3 sm:p-6 flex items-center justify-between border-b border-white/10 bg-black/40 backdrop-blur-md gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 text-[11px] sm:text-xs font-mono font-bold">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            <span className="hidden xs:inline">LIVE 4K PROJECTOR</span>
+            <span className="xs:hidden">LIVE</span>
           </div>
-          <div>
-            <div className="font-mono text-xs uppercase tracking-[0.25em] text-blue-400 font-semibold">
-              {event.institution} · {event.session}
-            </div>
-            <h1 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-white">
-              LIVE PROJECT RANKING BOARD
-            </h1>
-          </div>
+          <span className="text-xs sm:text-sm font-extrabold tracking-tight text-white hidden md:inline">
+            2026 UNIVERSITY DEMODAY · 실시간 순위 전광판
+          </span>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
           {currentUser?.role === "ADMIN" && (
             <button
+              type="button"
               onClick={toggleRankingPublic}
-              className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 font-mono text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+              className="px-2.5 sm:px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-[11px] sm:text-xs font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
             >
               {event.isRankingPublic ? (
                 <>
-                  <EyeOff size={14} className="text-rose-400" /> 랭킹 비공개 전환
+                  <EyeOff className="w-3.5 h-3.5 text-rose-400" /> <span className="hidden sm:inline">비공개</span>
                 </>
               ) : (
                 <>
-                  <Eye size={14} className="text-blue-400" /> ★ 전체 랭킹 즉시 공개
+                  <Eye className="w-3.5 h-3.5 text-blue-400" /> <span className="hidden sm:inline">공개 전환</span>
                 </>
               )}
             </button>
           )}
 
+          {/* Confetti Trigger Button */}
           <button
-            onClick={onClose}
-            className="p-2.5 rounded-full border border-slate-700 hover:border-white text-slate-400 hover:text-white transition-all cursor-pointer"
-            title="닫기 (ESC)"
+            type="button"
+            onClick={fireGrandConfetti}
+            className="px-3 sm:px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-extrabold text-[11px] sm:text-xs shadow-lg shadow-amber-500/30 hover:scale-105 transition cursor-pointer flex items-center gap-1.5"
           >
-            <X size={20} />
+            <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+            <span className="hidden sm:inline">축하 꽃가루 발사 (Confetti)</span>
+            <span className="sm:hidden">🎉 꽃가루</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* 메인 랭킹 본문 */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-6 md:px-12 py-8 md:py-12">
-        {/* 통계 요약 카드 4개 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-8 mb-8 border-b border-slate-800">
-          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-slate-400 text-xs font-mono block uppercase">참여 프로젝트</span>
-            <span className="text-2xl md:text-3xl font-bold font-mono text-white mt-1 block">
-              {sortedProjects.length} 팀
-            </span>
-          </div>
-          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-slate-400 text-xs font-mono block uppercase">총 누적 펀딩액</span>
-            <span className="text-2xl md:text-3xl font-bold font-mono text-blue-400 mt-1 block">
-              {totalFunded.toLocaleString()} CR
-            </span>
-          </div>
-          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-slate-400 text-xs font-mono block uppercase">진행 단계</span>
-            <span className="text-xl md:text-2xl font-bold font-mono text-white mt-1 block uppercase">
-              {event.currentStage}
-            </span>
-          </div>
-          <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-slate-400 text-xs font-mono block uppercase">대중 공개 상태</span>
-            <span
-              className={`text-xl md:text-2xl font-bold font-mono mt-1 block uppercase ${
-                event.isRankingPublic ? "text-emerald-400" : "text-amber-400"
-              }`}
-            >
-              {event.isRankingPublic ? "공개됨 (PUBLIC)" : "비공개 (BLIND)"}
-            </span>
-          </div>
+      {/* Main Stage Area: Top 3 3D-Podium Section */}
+      <div className="flex-1 flex flex-col justify-center items-center px-2 sm:px-8 py-4 sm:py-8 relative">
+        
+        {/* Ambient Background Glows */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 left-1/4 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="text-center mb-4 sm:mb-6 space-y-1">
+          <span className="text-amber-400 font-mono text-[10px] sm:text-xs tracking-widest uppercase">
+            Official Real-time Leaderboard
+          </span>
+          <h1 className="text-xl sm:text-4xl font-extrabold tracking-tight text-white">
+            실시간 종합 랭킹 & 환산 스코어
+          </h1>
         </div>
 
-        {/* 랭킹 비공개 안내 (관리자 이외) */}
-        {!event.isRankingPublic && currentUser?.role !== "ADMIN" ? (
-          <div className="py-24 text-center rounded-3xl border border-slate-800 p-8 my-8 bg-slate-900/80 backdrop-blur-sm">
-            <div className="w-20 h-20 rounded-full bg-slate-800 text-slate-500 mx-auto flex items-center justify-center mb-6">
-              <Trophy size={40} className="animate-pulse text-blue-400" />
-            </div>
-            <h2 className="text-3xl md:text-5xl font-display font-bold tracking-tight mb-4 text-white">
-              RANKING IS CURRENTLY BLINDED
-            </h2>
-            <p className="font-sans text-base md:text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">
-              모든 발표와 투자가 공식 마감된 후, 관리자의 공개 신호와 함께 발표장 화면에 실시간 순위표가 송출됩니다.
-            </p>
-          </div>
-        ) : (
-          /* 순위 리스트 */
-          <div className="space-y-4">
-            {sortedProjects.map((proj, idx) => {
-              const rank = idx + 1;
-              const isTopThree = rank <= 3;
+        {/* 3D-PODIUM (2nd - 1st - 3rd) */}
+        <div className="w-full max-w-4xl grid grid-cols-3 gap-1.5 sm:gap-6 items-end">
+          
+          {/* 2ND PLACE (SILVER) */}
+          {leaderboardData[1] && (
+            <div className="flex flex-col items-center">
+              <div className="w-full bg-gradient-to-b from-slate-800/80 to-slate-900/90 rounded-xl sm:rounded-2xl p-2 sm:p-5 border border-slate-500/30 backdrop-blur-md text-center space-y-1 sm:space-y-2 shadow-xl hover:-translate-y-1 transition duration-200">
+                <span className="text-xl sm:text-2xl">🥈</span>
+                <div>
+                  <span className="text-[9px] sm:text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-200 font-bold">
+                    RANK 02
+                  </span>
+                </div>
+                <h3 className="font-bold text-white text-xs sm:text-base line-clamp-1">
+                  {leaderboardData[1].title}
+                </h3>
+                <div className="text-[10px] sm:text-xs text-slate-400 line-clamp-1">
+                  T{String(leaderboardData[1].teamNumber).padStart(2, "0")} · {leaderboardData[1].teamName}
+                </div>
 
-              return (
-                <div
-                  key={proj.id}
-                  className={`rounded-2xl border transition-all p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
-                    rank === 1
-                      ? "border-blue-500/80 bg-gradient-to-r from-blue-950/60 to-slate-900 shadow-accent-lg"
-                      : isTopThree
-                      ? "border-slate-700 bg-slate-800/80"
-                      : "border-slate-800/80 bg-slate-900/60"
-                  }`}
-                >
-                  {/* 순위 & 팀 정보 */}
-                  <div className="flex items-center space-x-6 md:space-x-8">
-                    <span
-                      className={`font-mono text-3xl md:text-5xl font-black w-14 text-center ${
-                        rank === 1
-                          ? "text-blue-400"
-                          : rank === 2 || rank === 3
-                          ? "text-white"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      {String(rank).padStart(2, "0")}
-                    </span>
-
-                    <div>
-                      <div className="flex items-center space-x-2.5 mb-1.5">
-                        <span className="font-mono text-xs uppercase px-2.5 py-0.5 rounded-full border border-slate-700 text-slate-300 bg-slate-800">
-                          TEAM {String(proj.teamNumber).padStart(2, "0")}
-                        </span>
-                        <span className="font-mono text-xs font-semibold text-slate-400">
-                          {proj.teamName}
-                        </span>
-                        {rank === 1 && (
-                          <span className="bg-accent-gradient text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                            <Sparkles size={11} /> 1ST PLACE
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-xl md:text-2xl font-display font-bold text-white tracking-tight">
-                        {proj.title}
-                      </h3>
-                    </div>
+                <div className="pt-1.5 sm:pt-2 border-t border-white/10">
+                  <div className="text-xs sm:text-xl font-extrabold font-mono text-cyan-300">
+                    {leaderboardData[1].totalCredits.toLocaleString()} <span className="text-[10px] sm:text-xs text-slate-400">CR</span>
                   </div>
-
-                  {/* 펀딩 결과 수치 & 환산 점수 */}
-                  <div className="flex items-center space-x-6 md:space-x-8 self-end md:self-center font-mono">
-                    <div className="text-right">
-                      <span className="text-slate-400 text-xs uppercase block flex items-center gap-1 justify-end">
-                        <Users size={12} /> 투자자
-                      </span>
-                      <span className="text-base md:text-lg font-bold text-slate-200">
-                        {proj.investorCount}명
-                      </span>
-                    </div>
-
-                    <div className="text-right min-w-[130px]">
-                      <span className="text-slate-400 text-xs uppercase block">누적 크레딧</span>
-                      <span className="text-xl md:text-2xl font-black text-slate-200 tracking-tight">
-                        {proj.totalCredits.toLocaleString()}{" "}
-                        <span className="text-xs font-normal text-slate-400">CR</span>
-                      </span>
-                    </div>
-
-                    <div className="text-right min-w-[130px] pl-4 border-l border-slate-700/80">
-                      <span className="text-blue-400 text-xs uppercase font-bold block">★ 환산 점수</span>
-                      <span className="text-2xl md:text-3xl font-black text-emerald-400 tracking-tight">
-                        {calculateScore(proj.totalCredits).toFixed(1)}{" "}
-                        <span className="text-xs font-normal text-slate-400">점</span>
-                      </span>
-                    </div>
+                  <div className="text-[11px] sm:text-sm font-extrabold font-mono text-slate-300">
+                    {leaderboardData[1].convertedPoints.toFixed(1)} 점
                   </div>
                 </div>
-              );
-            })}
+              </div>
+              {/* Silver Pillar */}
+              <div className="w-full h-16 sm:h-32 bg-gradient-to-b from-slate-700 to-slate-800 rounded-b-xl sm:rounded-b-2xl border-x border-b border-slate-600/50 flex items-center justify-center font-mono font-bold text-slate-400 text-sm sm:text-lg">
+                2nd
+              </div>
+            </div>
+          )}
+
+          {/* 1ST PLACE (GOLD) - Center Elevated & Glowing */}
+          {leaderboardData[0] && (
+            <div className="flex flex-col items-center -mt-4 sm:-mt-6">
+              <div className="w-full bg-gradient-to-b from-amber-950/80 via-slate-900/90 to-slate-950 rounded-xl sm:rounded-2xl p-2.5 sm:p-6 border-2 border-amber-400/80 backdrop-blur-md text-center space-y-1 sm:space-y-2 shadow-2xl shadow-amber-500/20 relative">
+                {/* Crown Icon */}
+                <div className="absolute -top-4 sm:-top-6 left-1/2 -translate-x-1/2 w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-base sm:text-2xl shadow-lg shadow-amber-400/50 font-bold">
+                  👑
+                </div>
+
+                <div className="pt-2 sm:pt-3">
+                  <span className="text-[9px] sm:text-xs font-mono px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-400 text-slate-950 font-black tracking-wide">
+                    CHAMPION
+                  </span>
+                </div>
+
+                <h3 className="font-extrabold text-white text-xs sm:text-lg line-clamp-1 pt-0.5 sm:pt-1">
+                  {leaderboardData[0].title}
+                </h3>
+                <div className="text-[10px] sm:text-xs font-semibold text-amber-300 line-clamp-1">
+                  T{String(leaderboardData[0].teamNumber).padStart(2, "0")} · {leaderboardData[0].teamName}
+                </div>
+
+                <div className="pt-1.5 sm:pt-2 border-t border-amber-400/20">
+                  <div className="text-sm sm:text-2xl font-black font-mono text-amber-400">
+                    {leaderboardData[0].totalCredits.toLocaleString()} <span className="text-[10px] sm:text-xs text-amber-200">CR</span>
+                  </div>
+                  <div className="text-xs sm:text-lg font-black font-mono text-cyan-300">
+                    {leaderboardData[0].convertedPoints.toFixed(1)} 점
+                  </div>
+                </div>
+              </div>
+              {/* Gold Pillar */}
+              <div className="w-full h-24 sm:h-48 bg-gradient-to-b from-amber-600 to-amber-800 rounded-b-xl sm:rounded-b-2xl border-x border-b border-amber-400/60 flex items-center justify-center font-mono font-black text-amber-200 text-base sm:text-2xl shadow-lg">
+                1st
+              </div>
+            </div>
+          )}
+
+          {/* 3RD PLACE (BRONZE) */}
+          {leaderboardData[2] && (
+            <div className="flex flex-col items-center">
+              <div className="w-full bg-gradient-to-b from-slate-800/80 to-slate-900/90 rounded-xl sm:rounded-2xl p-2 sm:p-5 border border-amber-700/40 backdrop-blur-md text-center space-y-1 sm:space-y-2 shadow-xl hover:-translate-y-1 transition duration-200">
+                <span className="text-xl sm:text-2xl">🥉</span>
+                <div>
+                  <span className="text-[9px] sm:text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 font-bold">
+                    RANK 03
+                  </span>
+                </div>
+                <h3 className="font-bold text-white text-xs sm:text-base line-clamp-1">
+                  {leaderboardData[2].title}
+                </h3>
+                <div className="text-[10px] sm:text-xs text-slate-400 line-clamp-1">
+                  T{String(leaderboardData[2].teamNumber).padStart(2, "0")} · {leaderboardData[2].teamName}
+                </div>
+
+                <div className="pt-1.5 sm:pt-2 border-t border-white/10">
+                  <div className="text-xs sm:text-xl font-extrabold font-mono text-cyan-300">
+                    {leaderboardData[2].totalCredits.toLocaleString()} <span className="text-[10px] sm:text-xs text-slate-400">CR</span>
+                  </div>
+                  <div className="text-[11px] sm:text-sm font-extrabold font-mono text-slate-300">
+                    {leaderboardData[2].convertedPoints.toFixed(1)} 점
+                  </div>
+                </div>
+              </div>
+              {/* Bronze Pillar */}
+              <div className="w-full h-12 sm:h-28 bg-gradient-to-b from-amber-800 to-slate-800 rounded-b-xl sm:rounded-b-2xl border-x border-b border-amber-700/50 flex items-center justify-center font-mono font-bold text-amber-300 text-sm sm:text-lg">
+                3rd
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* 4th ~ 6th Place Mini Score Strip */}
+        {leaderboardData.length > 3 && (
+          <div className="w-full max-w-4xl mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {leaderboardData.slice(3, 6).map((t, i) => (
+              <div key={t.id} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-slate-400">{i + 4}위</span>
+                  <span className="font-semibold text-slate-200 truncate max-w-36">{t.teamName}</span>
+                </div>
+                <div className="font-mono text-cyan-300 font-bold">
+                  {t.totalCredits.toLocaleString()} CR ({t.convertedPoints.toFixed(1)}점)
+                </div>
+              </div>
+            ))}
           </div>
         )}
-      </main>
 
-      {/* 최하단 푸터 */}
-      <footer className="relative z-10 border-t border-slate-800 px-6 md:px-12 py-4 flex items-center justify-between font-mono text-xs text-slate-500">
-        <span>CROWDFUND LIVE PROJECTION ENGINE</span>
-        <span>PRESS ESC OR CLOSE BUTTON TO RETURN</span>
-      </footer>
+      </div>
+
+      {/* Bottom Ticker: Current Conversion Formula Banner */}
+      <div className="px-6 py-3 border-t border-white/10 bg-black/60 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-mono text-slate-400">
+        <div className="flex items-center gap-2">
+          <span className="text-amber-400">📊 공식 환산 산출식:</span>
+          <span>매 {ratio.creditUnit.toLocaleString()} CR 당 = {ratio.scorePerUnit}점 자동 환산 적용 중</span>
+        </div>
+        <div className="text-cyan-400 font-semibold">
+          ● REAL-TIME SYNC ACTIVATED · 2026 DEMODAY JURY SYSTEM
+        </div>
+      </div>
+
     </div>
   );
 };

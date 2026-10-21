@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Event, Project, User, Investment, EventStage, RosterItem, UserRole } from "@/types";
-import { INITIAL_EVENT, INITIAL_ROSTER } from "@/lib/mockData";
+import { Event, Project, User, Investment, EventStage, RosterItem, UserRole, Comment } from "@/types";
+import { INITIAL_EVENT, INITIAL_ROSTER, INITIAL_PROJECTS, INITIAL_USERS, INITIAL_INVESTMENTS } from "@/lib/mockData";
 import {
   fetchAllFromSupabase,
   dbInsertUser,
@@ -11,6 +11,7 @@ import {
   dbUpdateProject,
   dbDeleteProject,
   dbSaveInvestment,
+  dbDeleteInvestment,
   dbUpdateEvent,
   mapDbUserToModel,
 } from "@/lib/supabaseService";
@@ -51,6 +52,9 @@ interface AppContextType {
   toggleRankingPublic: () => Promise<void>;
   toggleProjectVisibility: (projectId: string) => Promise<void>;
   invest: (projectId: string, amount: number) => Promise<{ success: boolean; message: string }>;
+  cancelInvestment: (investmentId: string) => Promise<{ success: boolean; message: string }>;
+  addComment: (projectId: string, message: string) => Promise<{ success: boolean; message: string }>;
+  resetCreditsToDefault: () => void;
   getUserInvestmentForProject: (projectId: string) => Investment | undefined;
   getUserTotalInvestments: () => Investment[];
   createProject: (
@@ -61,6 +65,7 @@ interface AppContextType {
   resetAllData: () => void;
   refreshFromSupabase: () => Promise<void>;
 }
+
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -94,17 +99,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const savedVersion = localStorage.getItem("mc_data_version");
     if (savedVersion !== STORAGE_VERSION) {
-      // 과거 캐시 완전 청소
-      localStorage.removeItem("mc_projects");
-      localStorage.removeItem("mc_users");
-      localStorage.removeItem("mc_investments");
-      localStorage.removeItem("mc_current_user_id");
+      // 과거 캐시 완전 청소 후 기본 데이터 세팅
       localStorage.setItem("mc_data_version", STORAGE_VERSION);
-      setProjects([]);
-      setUsers([]);
-      setInvestments([]);
-      setCurrentUserState(null);
-      setIsLoggedIn(false);
+      setProjects(INITIAL_PROJECTS);
+      setUsers(INITIAL_USERS);
+      setInvestments(INITIAL_INVESTMENTS);
+      setCurrentUserState(INITIAL_USERS[0]);
+      setIsLoggedIn(true);
+      localStorage.setItem("mc_current_user_id", INITIAL_USERS[0].id);
+      saveToStorage(INITIAL_EVENT, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_USERS);
     } else {
       const savedProjects = localStorage.getItem("mc_projects");
       const savedInvestments = localStorage.getItem("mc_investments");
@@ -112,18 +115,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const savedEvent = localStorage.getItem("mc_event");
       const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
 
-      if (savedProjects) setProjects(JSON.parse(savedProjects));
-      if (savedInvestments) setInvestments(JSON.parse(savedInvestments));
-      if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers);
-        setUsers(parsedUsers);
-        if (savedCurrentUserId) {
-          const found = parsedUsers.find((u: User) => u.id === savedCurrentUserId);
-          if (found) {
-            setCurrentUserState(found);
-            setIsLoggedIn(true);
-          }
+      const loadedProjects = savedProjects ? JSON.parse(savedProjects) : INITIAL_PROJECTS;
+      const loadedInvestments = savedInvestments ? JSON.parse(savedInvestments) : INITIAL_INVESTMENTS;
+      const loadedUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
+
+      setProjects(loadedProjects.length > 0 ? loadedProjects : INITIAL_PROJECTS);
+      setInvestments(loadedInvestments.length > 0 ? loadedInvestments : INITIAL_INVESTMENTS);
+      setUsers(loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS);
+
+      if (savedCurrentUserId) {
+        const found = loadedUsers.find((u: User) => u.id === savedCurrentUserId);
+        if (found) {
+          setCurrentUserState(found);
+          setIsLoggedIn(true);
+        } else {
+          setCurrentUserState(INITIAL_USERS[0]);
+          setIsLoggedIn(true);
         }
+      } else {
+        setCurrentUserState(INITIAL_USERS[0]);
+        setIsLoggedIn(true);
       }
       if (savedEvent) setEventState(JSON.parse(savedEvent));
     }
@@ -132,28 +143,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const supaData = await fetchAllFromSupabase();
       if (!supaData.error) {
-        setProjects(supaData.projects || []);
-        setUsers(supaData.users || []);
-        setInvestments(supaData.investments || []);
+        const finalProjects = supaData.projects && supaData.projects.length > 0 ? supaData.projects : INITIAL_PROJECTS;
+        const finalUsers = supaData.users && supaData.users.length > 0 ? supaData.users : INITIAL_USERS;
+        const finalInvestments = supaData.investments && supaData.investments.length > 0 ? supaData.investments : INITIAL_INVESTMENTS;
+
+        setProjects(finalProjects);
+        setUsers(finalUsers);
+        setInvestments(finalInvestments);
         if (supaData.event) {
           setEventState(supaData.event);
         }
 
         // 로그인 유지 유저 동기화
         const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
-        if (savedCurrentUserId && supaData.users) {
-          const found = supaData.users.find((u: User) => u.id === savedCurrentUserId);
+        if (savedCurrentUserId && finalUsers.length > 0) {
+          const found = finalUsers.find((u: User) => u.id === savedCurrentUserId);
           if (found) {
             setCurrentUserState(found);
             setIsLoggedIn(true);
+          } else {
+            setCurrentUserState(finalUsers[0]);
+            setIsLoggedIn(true);
           }
+        } else if (finalUsers.length > 0) {
+          setCurrentUserState(finalUsers[0]);
+          setIsLoggedIn(true);
         }
 
         saveToStorage(
           supaData.event || event,
-          supaData.projects || [],
-          supaData.investments || [],
-          supaData.users || []
+          finalProjects,
+          finalInvestments,
+          finalUsers
         );
       }
     } catch (err) {
@@ -603,6 +624,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  // 5. 투자 취소 (전액 환불)
+  const cancelInvestment = async (investmentId: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser) return { success: false, message: "로그인이 필요합니다." };
+    const targetInv = investments.find((inv) => inv.id === investmentId);
+    if (!targetInv) return { success: false, message: "투자 내역을 찾을 수 없습니다." };
+
+    let newProjectTotal = 0;
+    let newInvestorCount = 0;
+
+    const newInvestments = investments.filter((inv) => inv.id !== investmentId);
+    const updatedProjects = projects.map((p) => {
+      if (p.id === targetInv.projectId) {
+        newProjectTotal = Math.max(0, p.totalCredits - targetInv.amount);
+        newInvestorCount = Math.max(0, p.investorCount - 1);
+        return {
+          ...p,
+          totalCredits: newProjectTotal,
+          investorCount: newInvestorCount,
+        };
+      }
+      return p;
+    });
+
+    await dbDeleteInvestment(investmentId, targetInv.projectId, newProjectTotal, newInvestorCount);
+
+    setInvestments(newInvestments);
+    setProjects(updatedProjects);
+    saveToStorage(event, updatedProjects, newInvestments, users);
+
+    return {
+      success: true,
+      message: `투자가 취소되어 ${targetInv.amount.toLocaleString()} CR이 지갑으로 전액 환불되었습니다.`,
+    };
+  };
+
+  // 6. 응원 댓글 등록
+  const addComment = async (projectId: string, message: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser) return { success: false, message: "로그인이 필요합니다." };
+    if (!message.trim()) return { success: false, message: "댓글 내용을 입력해 주세요." };
+
+    const newComment: Comment = {
+      id: `c_${Date.now()}`,
+      author: currentUser.name,
+      team: currentUser.teamName || (currentUser.role === "ADMIN" ? "운영진" : "청중 평가단"),
+      message: message.trim(),
+      timestamp: "방금 전",
+    };
+
+    const updatedProjects = projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          comments: [newComment, ...(p.comments || [])],
+        };
+      }
+      return p;
+    });
+
+    setProjects(updatedProjects);
+    saveToStorage(event, updatedProjects, investments, users);
+    return { success: true, message: "응원 댓글이 등록되었습니다." };
+  };
+
+  // 7. 테스트 잔액 리필 / 초기화
+  const resetCreditsToDefault = () => {
+    if (!currentUser) return;
+    const userInvestments = investments.filter((inv) => inv.investorId === currentUser.id);
+    const nonUserInvestments = investments.filter((inv) => inv.investorId !== currentUser.id);
+
+    const updatedProjects = projects.map((p) => {
+      const myInv = userInvestments.find((inv) => inv.projectId === p.id);
+      if (myInv) {
+        return {
+          ...p,
+          totalCredits: Math.max(0, p.totalCredits - myInv.amount),
+          investorCount: Math.max(0, p.investorCount - 1),
+        };
+      }
+      return p;
+    });
+
+    setInvestments(nonUserInvestments);
+    setProjects(updatedProjects);
+    saveToStorage(event, updatedProjects, nonUserInvestments, users);
+  };
+
   const resetAllData = () => {
     localStorage.removeItem("mc_event");
     localStorage.removeItem("mc_projects");
@@ -610,11 +717,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("mc_users");
     localStorage.removeItem("mc_current_user_id");
     setEventState(INITIAL_EVENT);
-    setProjects([]);
-    setInvestments([]);
-    setUsers([]);
-    setCurrentUserState(null);
-    setIsLoggedIn(false);
+    setProjects(INITIAL_PROJECTS);
+    setInvestments(INITIAL_INVESTMENTS);
+    setUsers(INITIAL_USERS);
+    setCurrentUserState(INITIAL_USERS[0]);
+    setIsLoggedIn(true);
   };
 
   return (
@@ -640,6 +747,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleRankingPublic,
         toggleProjectVisibility,
         invest,
+        cancelInvestment,
+        addComment,
+        resetCreditsToDefault,
         getUserInvestmentForProject,
         getUserTotalInvestments,
         createProject,
@@ -653,6 +763,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     </AppContext.Provider>
   );
 }
+
 
 export function useApp() {
   const context = useContext(AppContext);

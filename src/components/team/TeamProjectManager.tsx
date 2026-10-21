@@ -1,204 +1,150 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useApp } from "@/context/AppContext";
-import { Button } from "@/components/ui/Button";
-import { LandingFormat } from "@/types";
-import { CheckCircle2, Lock, FolderGit2, AlertCircle } from "lucide-react";
+import { Project } from "@/types";
+import { Award, Eye, CheckCircle2, Users, Coins } from "lucide-react";
 
-export const TeamProjectManager: React.FC = () => {
-  const { currentUser, projects, updateProject, event } = useApp();
-  const myTeamProject = projects.find((p) => p.teamId === currentUser?.teamId);
+interface TeamProjectManagerProps {
+  onSelectProject?: (project: Project) => void;
+  openCreateProject?: () => void;
+}
 
-  const isLocked = event.currentStage === "FUNDING_OPEN" || event.currentStage === "FUNDING_CLOSED" || event.currentStage === "RANKING_PUBLISHED";
+export const TeamProjectManager: React.FC<TeamProjectManagerProps> = ({
+  onSelectProject,
+  openCreateProject,
+}) => {
+  const { currentUser, projects } = useApp();
 
-  const [title, setTitle] = useState(myTeamProject?.title || "");
-  const [summary, setSummary] = useState(myTeamProject?.summary || "");
-  const [description, setDescription] = useState(myTeamProject?.description || "");
-  const [landingFormat, setLandingFormat] = useState<LandingFormat>(myTeamProject?.landingFormat || "IMAGE");
-  const [thumbnailUrl, setThumbnailUrl] = useState(myTeamProject?.thumbnailUrl || "");
-  const [landingUrl, setLandingUrl] = useState(myTeamProject?.landingUrl || "");
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  if (!currentUser) return null;
 
-  if (!currentUser?.teamId) {
+  // 내 팀 프로젝트 찾기 (isUserProject이거나 currentUser.teamId 일치 또는 authorId 일치)
+  const myProj = projects.find(
+    (p) =>
+      p.isUserProject ||
+      (currentUser.teamId && currentUser.teamId === p.teamId) ||
+      p.authorId === currentUser.id
+  );
+
+  if (!myProj) {
     return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center font-mono text-sm text-slate-500">
-        소속된 팀이 없습니다. (심사위원 또는 관리자 계정입니다)
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+          <Award className="w-7 h-7" />
+        </div>
+        <h2 className="font-bold text-slate-800 text-lg">아직 출품 등록된 팀 프로젝트가 없습니다</h2>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          데모데이에 출품할 우리 팀의 혁신 아이템을 등록하고 동료와 심사위원들의 모의투자를 받아보세요.
+        </p>
+        {openCreateProject && (
+          <button
+            type="button"
+            onClick={openCreateProject}
+            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+          >
+            새 프로젝트 출품 등록하기
+          </button>
+        )}
       </div>
     );
   }
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isLocked) {
-      alert("펀딩 단계가 시작된 이후에는 평가의 공정성을 위해 프로젝트를 수정할 수 없습니다.");
-      return;
-    }
-
-    if (myTeamProject) {
-      await updateProject({
-        id: myTeamProject.id,
-        title,
-        summary,
-        description,
-        landingFormat,
-        thumbnailUrl: thumbnailUrl || myTeamProject.thumbnailUrl,
-        landingUrl: landingUrl || myTeamProject.landingUrl,
-      });
-
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2500);
-    }
-  };
+  const targetCredits = myProj.targetCredits || 20000;
+  const progressPct = Math.round((myProj.totalCredits / targetCredits) * 100);
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 p-6 md:p-10 shadow-sm space-y-8">
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-mono text-[11px] font-bold uppercase tracking-wider">
-            <FolderGit2 size={12} /> TEAM REPOSITORY
+    <div className="flex flex-col gap-6">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+            <Award className="w-3.5 h-3.5" />
+            내 팀 출품 프로젝트 대시보드
           </div>
-          {isLocked && (
-            <span className="bg-slate-900 text-white px-3 py-1 rounded-full font-mono text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-              <Lock size={12} className="text-amber-400" /> 프로젝트 수정 잠김 (펀딩 진행 중)
-            </span>
-          )}
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
+            [Team {String(myProj.teamNumber).padStart(2, "0")}] {myProj.teamName} - {myProj.title}
+          </h1>
         </div>
-        <h2 className="text-3xl md:text-4xl font-display font-bold text-slate-900 tracking-tight mt-2">
-          우리 팀 프로젝트 관리 ({myTeamProject?.teamName})
-        </h2>
-        <p className="text-sm text-slate-600 mt-1">
-          같은 팀원 누구나 등록·수정할 수 있으며, 마지막 저장 시 수정자와 시각이 자동으로 기록됩니다.
-        </p>
+
+        {onSelectProject && (
+          <button
+            type="button"
+            onClick={() => onSelectProject(myProj)}
+            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition flex items-center gap-1.5 self-start cursor-pointer shadow-xs"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>투자자 뷰로 확인</span>
+          </button>
+        )}
       </div>
 
-      {myTeamProject && (
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 font-mono text-xs text-slate-600 flex justify-between">
-          <span>마지막 수정자: <strong className="text-slate-900">{myTeamProject.lastModifierName}</strong></span>
-          <span>수정 시각: <strong className="text-slate-900">{myTeamProject.lastModifiedAt}</strong></span>
-        </div>
-      )}
-
-      <form onSubmit={handleSave} className="space-y-6">
-        <div>
-          <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-            프로젝트 제목 (Title) *
-          </label>
-          <input
-            type="text"
-            required
-            disabled={isLocked}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 font-display text-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-slate-100"
-            placeholder="팀의 대표 프로젝트 명칭을 입력하세요"
-          />
+      {/* 3 KPI Stats for My Project */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs">
+          <p className="text-xs font-semibold text-slate-500">누적 펀딩 모의투자액</p>
+          <p className="text-2xl font-extrabold font-mono text-blue-600 mt-1">
+            {myProj.totalCredits.toLocaleString()}{" "}
+            <span className="text-xs font-sans text-slate-500">CR</span>
+          </p>
+          <p className="text-[11px] text-slate-400 mt-1">
+            목표 {targetCredits.toLocaleString()} CR 대비 {progressPct}% 달성
+          </p>
         </div>
 
-        <div>
-          <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-            한 줄 소개글 (Summary) *
-          </label>
-          <input
-            type="text"
-            required
-            disabled={isLocked}
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-slate-100"
-            placeholder="갤러리 카드에 노출될 핵심 한 줄 설명"
-          />
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs">
+          <p className="text-xs font-semibold text-slate-500">투자 참여 서포터 수</p>
+          <p className="text-2xl font-extrabold font-mono text-indigo-600 mt-1">
+            {myProj.investorCount}{" "}
+            <span className="text-xs font-sans text-slate-500">명</span>
+          </p>
+          <p className="text-[11px] text-slate-400 mt-1">실시간 청중 평가 참여 중</p>
         </div>
 
-        <div>
-          <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-            상세 설명 (Description)
-          </label>
-          <textarea
-            rows={5}
-            disabled={isLocked}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-4 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-slate-100"
-            placeholder="프로젝트의 문제 정의 및 해결 솔루션을 상세히 기술하세요"
-          />
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-2xs">
+          <p className="text-xs font-semibold text-slate-500">자가 투자 방지 상태</p>
+          <p className="text-base font-bold text-amber-600 mt-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            규정 준수 (클린 펀딩)
+          </p>
+          <p className="text-[11px] text-slate-400 mt-1">본인 팀 투자 차단 기능 활성</p>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-              랜딩페이지 파일 형식 (Landing Format)
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["IMAGE", "PDF", "HTML"] as LandingFormat[]).map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  disabled={isLocked}
-                  onClick={() => setLandingFormat(fmt)}
-                  className={`py-2.5 rounded-xl border font-mono text-xs font-bold uppercase transition-all ${
-                    landingFormat === fmt
-                      ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
+      {/* Backers & Investor Cheering Comments Feed */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
+        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+          <Users className="w-4 h-4 text-blue-600" />
+          우리 팀을 응원해준 서포터 & 피드백 로그
+        </h2>
+
+        {(myProj.comments && myProj.comments.length > 0) ? (
+          <div className="divide-y divide-slate-100">
+            {myProj.comments.map((cm) => (
+              <div key={cm.id} className="py-3 flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-slate-900">{cm.author}</span>
+                    <span className="text-[11px] text-slate-400">({cm.team})</span>
+                    {cm.amount && (
+                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold font-mono">
+                        +{cm.amount.toLocaleString()} CR 투자
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">{cm.message}</p>
+                </div>
+                <span className="text-[10px] text-slate-400 shrink-0 font-mono">{cm.timestamp}</span>
+              </div>
+            ))}
           </div>
-
-          <div>
-            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-              대표 썸네일 이미지 URL
-            </label>
-            <input
-              type="text"
-              disabled={isLocked}
-              value={thumbnailUrl}
-              onChange={(e) => setThumbnailUrl(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-mono text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-slate-100"
-              placeholder="https://..."
-            />
+        ) : (
+          <div className="py-8 text-center text-slate-400 text-xs">
+            아직 등록된 응원 및 피드백 로그가 없습니다.
           </div>
-        </div>
+        )}
+      </div>
 
-        <div>
-          <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-700 mb-2">
-            랜딩페이지 소스 URL ({landingFormat})
-          </label>
-          <input
-            type="text"
-            disabled={isLocked}
-            value={landingUrl}
-            onChange={(e) => setLandingUrl(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-mono text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none disabled:bg-slate-100"
-            placeholder={
-              landingFormat === "IMAGE"
-                ? "고화질 랜딩 이미지 URL (Supabase Storage 등)"
-                : landingFormat === "PDF"
-                ? "PDF 문서 URL"
-                : "단일 HTML 파일 URL"
-            }
-          />
-        </div>
-
-        <div className="pt-4 flex items-center justify-between border-t border-slate-100">
-          {savedSuccess ? (
-            <span className="font-mono text-xs font-bold text-emerald-600 flex items-center gap-1.5">
-              <CheckCircle2 size={16} /> 프로젝트가 성공적으로 저장되었습니다.
-            </span>
-          ) : (
-            <span className="font-mono text-xs text-slate-400">
-              {isLocked ? "현재 단계에서는 수정이 잠겨 있습니다." : "저장 시 즉시 갤러리에 반영됩니다."}
-            </span>
-          )}
-
-          <Button type="submit" variant="primary" disabled={isLocked}>
-            프로젝트 정보 저장하기
-          </Button>
-        </div>
-      </form>
     </div>
   );
 };

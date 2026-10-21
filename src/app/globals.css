@@ -103,3 +103,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline: none !important;
   box-shadow: 0 0 0 2px #FAFAFA, 0 0 0 4px #0052FF !important;
 }
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

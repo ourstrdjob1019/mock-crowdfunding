@@ -2,17 +2,16 @@
 
 import React from "react";
 import { useApp } from "@/context/AppContext";
-import { Badge } from "@/components/ui/Badge";
 import { 
-  LayoutGrid, 
-  WalletCards, 
-  ShieldCheck, 
-  Trophy, 
-  LogOut, 
-  Sparkles, 
-  CreditCard, 
-  ChevronRight,
-  Plus
+  Compass, 
+  Briefcase, 
+  Building2, 
+  Sliders, 
+  Coins, 
+  RotateCcw, 
+  Plus, 
+  LogOut,
+  X
 } from "lucide-react";
 
 interface SidebarProps {
@@ -20,6 +19,8 @@ interface SidebarProps {
   setCurrentTab: (tab: "gallery" | "my-investments" | "team-project" | "admin") => void;
   openProjectorRanking?: () => void;
   openCreateProject?: () => void;
+  isOpenMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,185 +28,238 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setCurrentTab,
   openProjectorRanking,
   openCreateProject,
+  isOpenMobile = false,
+  onCloseMobile,
 }) => {
-  const { event, currentUser, users, setCurrentUser, logout, remainingCredits, usedCredits } = useApp();
+  const {
+    event,
+    currentUser,
+    users,
+    setCurrentUser,
+    logout,
+    remainingCredits,
+    usedCredits,
+    projects,
+    getUserTotalInvestments,
+    resetCreditsToDefault,
+  } = useApp();
 
   if (!currentUser) return null;
 
-  const stageLabels: Record<string, { text: string; badge: "primary" | "secondary" | "outline" | "success" }> = {
-    PREPARING: { text: "준비 중", badge: "outline" },
-    REGISTRATION: { text: "등록 접수", badge: "secondary" },
-    FUNDING_OPEN: { text: "펀딩 진행 중", badge: "primary" },
-    FUNDING_CLOSED: { text: "펀딩 마감", badge: "secondary" },
-    RANKING_PUBLISHED: { text: "결과 공개됨", badge: "success" },
+  const creditUsagePercent = Math.min(100, Math.round((usedCredits / event.baseCredit) * 100));
+  const myInvestments = getUserTotalInvestments();
+
+  const handleTabClick = (tab: "gallery" | "my-investments" | "team-project" | "admin") => {
+    setCurrentTab(tab);
+    if (onCloseMobile) onCloseMobile();
   };
 
-  const creditUsagePercent = Math.min(100, (usedCredits / event.baseCredit) * 100);
-
-  return (
-    <aside className="w-72 md:w-80 bg-white border-r border-slate-200/90 flex flex-col justify-between h-screen sticky top-0 shrink-0 z-30 shadow-sm">
-      {/* 1. 상단 브랜드 & 행사 정보 */}
-      <div>
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center space-x-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-accent-gradient flex items-center justify-center text-white shadow-accent">
-              <Sparkles size={20} />
+  const sidebarContent = (
+    <>
+      <div className="flex flex-col gap-4 p-5 overflow-y-auto flex-1">
+        
+        {/* 1. Logo Header */}
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+              <Coins className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-display text-xl font-bold tracking-tight text-slate-900 block leading-tight">
+              <div className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-800 bg-clip-text text-transparent">
                 CROWDFUND
-              </span>
-              <span className="font-mono text-[11px] text-blue-600 font-bold uppercase tracking-wider">
-                EVALUATION PLATFORM
-              </span>
+              </div>
+              <div className="text-[11px] font-medium text-slate-500 tracking-wide">
+                2026 University DemoDay
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1 text-xs">
-            <div className="font-semibold text-slate-800">{event.name}</div>
-            <div className="font-mono text-[11px] text-slate-400">
-              {event.institution} · {event.session}
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <Badge
-              variant={stageLabels[event.currentStage].badge}
-              size="sm"
-              hasPulseDot={event.currentStage === "FUNDING_OPEN"}
+          {/* 모바일 닫기 버튼 */}
+          {onCloseMobile && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              title="사이드바 닫기"
             >
-              {stageLabels[event.currentStage].text}
-            </Badge>
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* 2. Bento Wallet Card */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs relative overflow-hidden group hover:border-blue-300 transition-colors">
+          <div className="absolute -top-12 -right-12 w-28 h-28 bg-blue-100 rounded-full blur-2xl opacity-60 pointer-events-none"></div>
+
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
+            <span className="flex items-center gap-1.5 text-slate-700">
+              <Coins className="w-3.5 h-3.5 text-amber-500" />
+              내 투자 지갑 (Wallet)
+            </span>
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
+              1인 한도
+            </span>
+          </div>
+
+          <div className="text-2xl font-extrabold font-mono text-slate-900 tracking-tight flex items-baseline gap-1">
+            {remainingCredits.toLocaleString()}
+            <span className="text-xs font-bold text-blue-600 font-sans">CR</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-3">
+            <div className="flex justify-between text-[11px] text-slate-500 font-mono mb-1">
+              <span>사용 {usedCredits.toLocaleString()} CR</span>
+              <span className="font-semibold text-blue-600">잔여 {remainingCredits.toLocaleString()} CR</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60">
+              <div
+                className="bg-gradient-to-r from-blue-600 to-cyan-500 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${creditUsagePercent}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {/* Fast Credit Reset / Refill for testing */}
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400">테스트 잔액 리필</span>
+            <button
+              type="button"
+              onClick={resetCreditsToDefault}
+              className="text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              초기화
+            </button>
           </div>
         </div>
 
-        {/* 2. 내 가상 크레딧 카드 위젯 (심사위원 및 학생) */}
-        {currentUser.role !== "ADMIN" && (
-          <div className="m-4 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg relative overflow-hidden">
-            <div className="absolute inset-0 bg-dot-pattern-dark opacity-30 pointer-events-none" />
-
-            <div className="relative z-10">
-              <div className="flex justify-between items-center text-[11px] font-mono text-slate-400 uppercase tracking-wider pb-1">
-                <span className="flex items-center gap-1.5 text-white font-bold">
-                  <CreditCard size={13} className="text-blue-400" /> 가상 자본 지갑
-                </span>
-                <span>총 10,000 CR</span>
-              </div>
-
-              <div className="mt-2">
-                <span className="text-[11px] font-mono text-slate-400 block">잔여 투자 가능액</span>
-                <span className="text-2xl font-mono font-bold tracking-tight text-white">
-                  {remainingCredits.toLocaleString()}{" "}
-                  <span className="text-xs font-normal text-blue-400">CR</span>
-                </span>
-              </div>
-
-              <div className="mt-3">
-                <div className="w-full bg-slate-700/80 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-accent-gradient h-full transition-all duration-300 rounded-full"
-                    style={{ width: `${creditUsagePercent}%` }}
-                  />
-                </div>
-                <div className="mt-1 flex justify-between text-[10px] font-mono text-slate-400">
-                  <span>투자 누적: {usedCredits.toLocaleString()} CR</span>
-                  <span>1회: 2천~5천</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. 사이드바 내비게이션 메뉴 목록 (학생: 갤러리/내투자만 노출, 관리자: 관리자 콘솔 노출) */}
-        <nav className="px-4 py-2 space-y-1.5">
+        {/* 3. Navigation Menu */}
+        <nav className="flex flex-col gap-1.5 bg-white rounded-2xl p-2 border border-slate-200/90 shadow-2xs">
           <button
-            onClick={() => setCurrentTab("gallery")}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            type="button"
+            onClick={() => handleTabClick("gallery")}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer ${
               currentTab === "gallery"
-                ? "bg-blue-50 text-blue-700 font-bold shadow-sm"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                ? "bg-blue-50 text-blue-700 font-bold"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             }`}
           >
-            <span className="flex items-center gap-3">
-              <LayoutGrid size={18} className={currentTab === "gallery" ? "text-blue-600" : "text-slate-400"} />
-              01. 프로젝트 갤러리
-            </span>
-            {currentTab === "gallery" && <ChevronRight size={14} className="text-blue-600" />}
+            <div className="flex items-center gap-2.5">
+              <Compass className={`w-4 h-4 ${currentTab === "gallery" ? "text-blue-600" : "text-slate-400"}`} />
+              <span>프로젝트 둘러보기</span>
+            </div>
+            <span className="text-[11px] font-mono text-slate-400 font-semibold">{projects.length}</span>
           </button>
 
-          {currentUser.role !== "ADMIN" && (
-            <button
-              onClick={() => setCurrentTab("my-investments")}
-              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                currentTab === "my-investments"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <WalletCards size={18} className={currentTab === "my-investments" ? "text-blue-600" : "text-slate-400"} />
-                02. 내 투자 내역
+          <button
+            type="button"
+            onClick={() => handleTabClick("my-investments")}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer ${
+              currentTab === "my-investments"
+                ? "bg-blue-50 text-blue-700 font-bold"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Briefcase className={`w-4 h-4 ${currentTab === "my-investments" ? "text-emerald-600" : "text-slate-400"}`} />
+              <span>내 투자 내역</span>
+            </div>
+            {myInvestments.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white font-mono">
+                {myInvestments.length}
               </span>
-              {currentTab === "my-investments" && <ChevronRight size={14} className="text-blue-600" />}
-            </button>
-          )}
+            )}
+          </button>
 
-          {/* 관리자(ADMIN)일 때만 관리자 콘솔 노출 (학생/심사위원에게는 완전 숨김) */}
+          <button
+            type="button"
+            onClick={() => handleTabClick("team-project")}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer ${
+              currentTab === "team-project"
+                ? "bg-blue-50 text-blue-700 font-bold"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Building2 className={`w-4 h-4 ${currentTab === "team-project" ? "text-amber-500" : "text-slate-400"}`} />
+              <span>내 팀 프로젝트</span>
+            </div>
+            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+              {currentUser.teamName || "Team 01"}
+            </span>
+          </button>
+
+          {/* Admin Console (관리자 역할일 때만 활성화) */}
           {currentUser.role === "ADMIN" && (
             <button
-              onClick={() => setCurrentTab("admin")}
-              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              type="button"
+              onClick={() => handleTabClick("admin")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer ${
                 currentTab === "admin"
-                  ? "bg-blue-50 text-blue-700 font-bold shadow-sm"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  ? "bg-slate-900 text-white font-bold shadow-xs"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              <span className="flex items-center gap-3">
-                <ShieldCheck size={18} className={currentTab === "admin" ? "text-blue-600" : "text-slate-400"} />
-                관리자 콘솔 (총괄 제어)
+              <div className="flex items-center gap-2.5">
+                <Sliders className="w-4 h-4 text-amber-400" />
+                <span>관리자 콘솔</span>
+              </div>
+              <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-amber-400/20 text-amber-500 font-bold">
+                ADMIN
               </span>
-              {currentTab === "admin" && <ChevronRight size={14} className="text-blue-600" />}
             </button>
           )}
         </nav>
 
+        {/* 4. CTA Button: Glowing primary blue "+ 새 프로젝트 출품 등록" */}
         {openCreateProject && (
-          <div className="px-4 pt-1 pb-2">
-            <button
-              onClick={openCreateProject}
-              className="w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200/80 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <Plus size={15} /> 새 프로젝트 출품 등록
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              openCreateProject();
+              if (onCloseMobile) onCloseMobile();
+            }}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold text-xs md:text-sm shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 transition-all duration-200 flex items-center justify-center gap-2 group cursor-pointer active:scale-98"
+          >
+            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
+            <span>새 프로젝트 출품 등록</span>
+          </button>
         )}
       </div>
 
-      {/* 4. 하단 프로필 */}
-      <div className="p-4 border-t border-slate-100 space-y-3 bg-slate-50/50">
-        <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center justify-between">
-          <div className="flex items-center space-x-2.5 truncate">
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
-              {currentUser.name.charAt(0)}
+      {/* 5. Bottom User Profile & Switcher */}
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 shrink-0">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0">
+              {currentUser.name.slice(0, 1)}
             </div>
-            <div className="truncate">
-              <div className="font-bold text-xs text-slate-800 truncate">{currentUser.name}</div>
-              <div className="font-mono text-[10px] text-slate-500 truncate">
-                [{currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "JUDGE" ? "심사위원" : currentUser.teamName ? "학생" : "일반참가"}] {currentUser.teamName || "자유 투자자"}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                  currentUser.role === "ADMIN" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                }`}>
+                  {currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "JUDGE" ? "심사위원" : "학생"}
+                </span>
               </div>
+              <p className="text-[11px] text-slate-500 truncate">{currentUser.teamName || currentUser.department || "2026 청중 평가단"}</p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={logout}
             title="로그아웃"
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer shrink-0"
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
           >
-            <LogOut size={16} />
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="pt-1">
+        {/* Quick simulator switch */}
+        <div>
           <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1">
             빠른 계정 전환 (시뮬레이터)
           </label>
@@ -215,7 +269,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const selected = users.find((u) => u.id === e.target.value);
               if (selected) {
                 setCurrentUser(selected);
-                // 학생으로 전환 시 갤러리로 자동 이동
                 if (selected.role !== "ADMIN" && currentTab === "admin") {
                   setCurrentTab("gallery");
                 }
@@ -225,12 +278,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             {users.map((u) => (
               <option key={u.id} value={u.id}>
-                [{u.role === "ADMIN" ? "관리자" : u.role === "JUDGE" ? "심사위원" : "학생"}] {u.name}
+                [{u.role === "ADMIN" ? "관리자" : u.role === "JUDGE" ? "심사위원" : "학생"}] {u.name} ({u.teamName || u.department || "참가자"})
               </option>
             ))}
           </select>
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* 1. 데스크톱 & 태블릿(md 이상): 고정 사이드바 */}
+      <aside className="hidden md:flex w-72 lg:w-80 bg-white border-r border-slate-200/90 flex-col justify-between h-screen sticky top-0 shrink-0 z-30 shadow-xs">
+        {sidebarContent}
+      </aside>
+
+      {/* 2. 모바일 (md 미만): 슬라이드인 오버레이 드로어 */}
+      {isOpenMobile && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* 어두운 배경 (클릭 시 닫힘) */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={onCloseMobile}
+          />
+          
+          {/* 슬라이드인 사이드바 본체 */}
+          <div className="relative w-80 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-left duration-250">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

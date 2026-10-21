@@ -50,7 +50,24 @@ export interface User {
   password?: string; // 로그인 비밀번호 (기본: 123456 or 8자리 난수)
 }
 
-export type LandingFormat = "IMAGE" | "PDF" | "HTML";
+export type LandingFormat = "IMAGE" | "PDF" | "HTML" | "WEB";
+export type ProjectCategory = "AI/SaaS" | "Bio/Health" | "FinTech" | "GreenTech" | "Robotics" | "EdTech";
+
+export interface Comment {
+  id: string;
+  author: string;
+  team: string;
+  amount?: number;
+  message: string;
+  timestamp: string;
+}
+
+export interface PdfSlide {
+  title: string;
+  subtitle: string;
+  content: string;
+  keyMetrics: string[];
+}
 
 export interface Project {
   id: string;
@@ -73,6 +90,16 @@ export interface Project {
   authorId?: string;
   authorName?: string;
   authorEmail?: string;
+  category?: ProjectCategory;
+  targetCredits?: number;
+  pitchHighlights?: string[];
+  teamMembers?: { name: string; role: string }[];
+  comments?: Comment[];
+  detailImages?: string[];
+  pdfSlides?: PdfSlide[];
+  webDemoUrl?: string;
+  webDemoFeatures?: string[];
+  isUserProject?: boolean;
 }
 
 export interface Investment {
@@ -86,3 +113,4 @@ export interface Investment {
   createdAt: string;
   updatedAt: string;
 }
+

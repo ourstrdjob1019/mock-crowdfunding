@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Project, LandingFormat } from "@/types";
+import { Project, LandingFormat, ProjectCategory } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
 import { uploadThumbnail, uploadLandingFile } from "@/lib/supabase";
@@ -37,6 +37,10 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const [teamName, setTeamName] = useState("");
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<ProjectCategory>("AI/SaaS");
+  const [targetCredits, setTargetCredits] = useState<number>(20000);
+  const [highlight1, setHighlight1] = useState("");
+  const [highlight2, setHighlight2] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [landingFormat, setLandingFormat] = useState<LandingFormat>("IMAGE");
   const [landingUrl, setLandingUrl] = useState("");
@@ -52,6 +56,10 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setTeamName(editProject.teamName);
       setSummary(editProject.summary);
       setDescription(editProject.description);
+      setCategory(editProject.category || "AI/SaaS");
+      setTargetCredits(editProject.targetCredits || 20000);
+      setHighlight1(editProject.pitchHighlights?.[0] || "");
+      setHighlight2(editProject.pitchHighlights?.[1] || "");
       setThumbnailUrl(editProject.thumbnailUrl);
       setLandingFormat(editProject.landingFormat);
       setLandingUrl(editProject.landingUrl);
@@ -62,6 +70,10 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setTeamName(currentUser?.teamName || `${currentUser?.name || "학생"} 팀`);
       setSummary("");
       setDescription("");
+      setCategory("AI/SaaS");
+      setTargetCredits(20000);
+      setHighlight1("");
+      setHighlight2("");
       setThumbnailUrl("https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80");
       setLandingFormat("IMAGE");
       setLandingUrl("");
@@ -208,6 +220,11 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      const highlights = [highlight1, highlight2].filter(Boolean);
+      if (highlights.length === 0) {
+        highlights.push("2026 데모데이 출품작 및 시장 검증 진행");
+      }
+
       if (isEditing && editProject) {
         const res = await updateProject({
           id: editProject.id,
@@ -215,6 +232,9 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           teamName: teamName.trim() || editProject.teamName,
           summary: summary.trim(),
           description: description.trim(),
+          category,
+          targetCredits: Number(targetCredits) || 20000,
+          pitchHighlights: highlights,
           thumbnailUrl: thumbnailUrl.trim(),
           landingFormat,
           landingUrl: finalLandingUrl,
@@ -235,6 +255,9 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           title: title.trim(),
           summary: summary.trim(),
           description: description.trim(),
+          category,
+          targetCredits: Number(targetCredits) || 20000,
+          pitchHighlights: highlights,
           thumbnailUrl: thumbnailUrl.trim(),
           landingFormat,
           landingUrl: finalLandingUrl,
@@ -365,18 +388,82 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
             />
           </div>
 
+          {/* 분야 및 목표 크레딧 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                혁신 분야 카테고리 *
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as ProjectCategory)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none bg-white cursor-pointer"
+              >
+                <option value="AI/SaaS">AI/SaaS</option>
+                <option value="Bio/Health">Bio/Health</option>
+                <option value="FinTech">FinTech</option>
+                <option value="GreenTech">GreenTech</option>
+                <option value="Robotics">Robotics</option>
+                <option value="EdTech">EdTech</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                목표 펀딩 크레딧 (CR) *
+              </label>
+              <input
+                type="number"
+                min={10000}
+                step={5000}
+                value={targetCredits}
+                onChange={(e) => setTargetCredits(Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none font-mono"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               상세 소개 글 (마크다운 / 텍스트)
             </label>
             <textarea
-              rows={4}
+              rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="프로젝트의 기획 배경, 핵심 기술력, 펀딩 목적을 자세히 작성해 주세요."
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none leading-relaxed"
             />
           </div>
+
+          {/* 핵심 성과 피치 하이라이트 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                핵심 성과 1
+              </label>
+              <input
+                type="text"
+                value={highlight1}
+                onChange={(e) => setHighlight1(e.target.value)}
+                placeholder="예: 국내외 특허 2건 출원 완료"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                핵심 성과 2
+              </label>
+              <input
+                type="text"
+                value={highlight2}
+                onChange={(e) => setHighlight2(e.target.value)}
+                placeholder="예: 사전 사용자 테스트 1,000명 확보"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+              />
+            </div>
+          </div>
+
 
           {/* 2. 대표 썸네일 이미지 업로드 */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">

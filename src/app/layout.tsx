@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Calistoga, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -22,9 +22,17 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CROWDFUND · 모의 크라우드펀딩 평가 시스템",
-  description: "Minimalist Modern 기반 학생 프로젝트 모의 크라우드펀딩 평가 플랫폼",
+  title: "CROWDFUND · 2026 대학 스타트업 데모데이 모의 크라우드펀딩",
+  description: "2026 University Startup Demo Day Mock Crowdfunding Platform",
 };
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 
 export default function RootLayout({
   children,
