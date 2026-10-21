@@ -73,7 +73,10 @@ function MainDashboard() {
           p.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
           p.teamName.toLowerCase().includes(searchQuery.toLowerCase());
         const matchCat = selectedCategory === "ALL" || p.category === selectedCategory;
-        const matchFmt = selectedFormat === "ALL" || p.landingFormat === selectedFormat;
+        const matchFmt =
+          selectedFormat === "ALL" ||
+          p.landingFormat === selectedFormat ||
+          (selectedFormat === "WEB" && p.landingFormat === "HTML");
         return matchSearch && matchCat && matchFmt;
       })
       .sort((a, b) => {

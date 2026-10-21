@@ -50,13 +50,13 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             Team {String(project.teamNumber).padStart(2, "0")}
           </span>
           <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold text-white backdrop-blur-md shadow-xs ${
-            project.landingFormat === "WEB" 
+            project.landingFormat === "WEB" || project.landingFormat === "HTML"
               ? "bg-cyan-600/90" 
               : project.landingFormat === "PDF" 
               ? "bg-indigo-600/90" 
               : "bg-emerald-600/90"
           }`}>
-            {project.landingFormat}
+            {project.landingFormat === "HTML" ? "WEB" : project.landingFormat}
           </span>
         </div>
 

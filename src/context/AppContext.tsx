@@ -79,7 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v8_pure_supabase_clean";
+  const STORAGE_VERSION = "v9_pdf_web_viewer_fix";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {
