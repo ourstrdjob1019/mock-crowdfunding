@@ -26,11 +26,12 @@ import {
   Briefcase,
   Building2,
   Sliders,
-  Trophy
+  Trophy,
+  LogOut
 } from "lucide-react";
 
 function MainDashboard() {
-  const { event, projects, currentUser, setCurrentUser, users } = useApp();
+  const { event, projects, currentUser, setCurrentUser, users, logout } = useApp();
   const [currentTab, setCurrentTab] = useState<"gallery" | "my-investments" | "team-project" | "admin">("gallery");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
@@ -172,6 +173,17 @@ function MainDashboard() {
                 <span className="xs:hidden">관리자</span>
               </button>
             </div>
+
+            {/* Quick Logout Button */}
+            <button
+              type="button"
+              onClick={logout}
+              title="로그아웃"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+              aria-label="로그아웃"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
 
         </div>
@@ -525,10 +537,29 @@ function MainDashboard() {
   );
 }
 
+function MainContent() {
+  const { currentUser, isLoading } = useApp();
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFC]">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs text-slate-500 font-mono">2026 데모데이 시스템 연결 중...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthScreen />;
+  }
+
+  return <MainDashboard />;
+}
+
 export default function Home() {
   return (
     <AppProvider>
-      <MainDashboard />
+      <MainContent />
     </AppProvider>
   );
 }

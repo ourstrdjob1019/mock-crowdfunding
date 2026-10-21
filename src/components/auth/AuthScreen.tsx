@@ -17,7 +17,7 @@ import {
 import { UserRole } from "@/types";
 
 export const AuthScreen: React.FC = () => {
-  const { login, register, projects, event } = useApp();
+  const { login, register, projects, event, users, demoLogin } = useApp();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -167,6 +167,45 @@ export const AuthScreen: React.FC = () => {
                 <Button type="submit" variant="primary" isFullWidth size="lg">
                   로그인 <ArrowRight size={16} className="ml-2" />
                 </Button>
+              </div>
+
+              {/* 데모 빠른 계정 로그인 (원클릭) */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <span className="block text-[11px] font-semibold text-slate-500 text-center">
+                  ⚡ 데모 원클릭 간편 로그인
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const student = users.find((u) => u.role === "STUDENT") || users[0];
+                      if (student) demoLogin(student.id);
+                    }}
+                    className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 text-[11px] font-bold text-slate-700 transition cursor-pointer text-center"
+                  >
+                    👤 학생
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const judge = users.find((u) => u.role === "JUDGE");
+                      if (judge) demoLogin(judge.id);
+                    }}
+                    className="p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200 text-[11px] font-bold text-slate-700 transition cursor-pointer text-center"
+                  >
+                    ⚖️ 심사위원
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const admin = users.find((u) => u.role === "ADMIN");
+                      if (admin) demoLogin(admin.id);
+                    }}
+                    className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 text-[11px] font-bold transition cursor-pointer text-center"
+                  >
+                    ⚙️ 총괄 관리자
+                  </button>
+                </div>
               </div>
 
               <p className="text-center text-[11px] text-slate-400 pt-2">

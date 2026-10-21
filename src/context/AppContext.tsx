@@ -98,22 +98,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
 
     const savedVersion = localStorage.getItem("mc_data_version");
+    const isLoggedOut = localStorage.getItem("mc_logged_out") === "true";
+    const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
+
     if (savedVersion !== STORAGE_VERSION) {
       // 과거 캐시 완전 청소 후 기본 데이터 세팅
       localStorage.setItem("mc_data_version", STORAGE_VERSION);
       setProjects(INITIAL_PROJECTS);
       setUsers(INITIAL_USERS);
       setInvestments(INITIAL_INVESTMENTS);
-      setCurrentUserState(INITIAL_USERS[0]);
-      setIsLoggedIn(true);
-      localStorage.setItem("mc_current_user_id", INITIAL_USERS[0].id);
+
+      if (!isLoggedOut && savedCurrentUserId) {
+        const found = INITIAL_USERS.find((u) => u.id === savedCurrentUserId);
+        if (found) {
+          setCurrentUserState(found);
+          setIsLoggedIn(true);
+        } else {
+          setCurrentUserState(null);
+          setIsLoggedIn(false);
+        }
+      } else {
+        setCurrentUserState(null);
+        setIsLoggedIn(false);
+      }
       saveToStorage(INITIAL_EVENT, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_USERS);
     } else {
       const savedProjects = localStorage.getItem("mc_projects");
       const savedInvestments = localStorage.getItem("mc_investments");
       const savedUsers = localStorage.getItem("mc_users");
       const savedEvent = localStorage.getItem("mc_event");
-      const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
 
       const loadedProjects = savedProjects ? JSON.parse(savedProjects) : INITIAL_PROJECTS;
       const loadedInvestments = savedInvestments ? JSON.parse(savedInvestments) : INITIAL_INVESTMENTS;
@@ -123,18 +136,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setInvestments(loadedInvestments.length > 0 ? loadedInvestments : INITIAL_INVESTMENTS);
       setUsers(loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS);
 
-      if (savedCurrentUserId) {
+      if (!isLoggedOut && savedCurrentUserId) {
         const found = loadedUsers.find((u: User) => u.id === savedCurrentUserId);
         if (found) {
           setCurrentUserState(found);
           setIsLoggedIn(true);
         } else {
-          setCurrentUserState(INITIAL_USERS[0]);
-          setIsLoggedIn(true);
+          setCurrentUserState(null);
+          setIsLoggedIn(false);
         }
       } else {
-        setCurrentUserState(INITIAL_USERS[0]);
-        setIsLoggedIn(true);
+        setCurrentUserState(null);
+        setIsLoggedIn(false);
       }
       if (savedEvent) setEventState(JSON.parse(savedEvent));
     }
@@ -155,19 +168,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // 로그인 유지 유저 동기화
-        const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
-        if (savedCurrentUserId && finalUsers.length > 0) {
-          const found = finalUsers.find((u: User) => u.id === savedCurrentUserId);
+        const currentSavedId = localStorage.getItem("mc_current_user_id");
+        const currentIsLoggedOut = localStorage.getItem("mc_logged_out") === "true";
+        if (!currentIsLoggedOut && currentSavedId && finalUsers.length > 0) {
+          const found = finalUsers.find((u: User) => u.id === currentSavedId);
           if (found) {
             setCurrentUserState(found);
             setIsLoggedIn(true);
           } else {
-            setCurrentUserState(finalUsers[0]);
-            setIsLoggedIn(true);
+            setCurrentUserState(null);
+            setIsLoggedIn(false);
+            localStorage.removeItem("mc_current_user_id");
           }
-        } else if (finalUsers.length > 0) {
-          setCurrentUserState(finalUsers[0]);
-          setIsLoggedIn(true);
+        } else {
+          setCurrentUserState(null);
+          setIsLoggedIn(false);
         }
 
         saveToStorage(
@@ -241,12 +256,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setCurrentUserState(targetUser);
     setIsLoggedIn(true);
+    localStorage.removeItem("mc_logged_out");
     localStorage.setItem("mc_current_user_id", targetUser.id);
     return { success: true, message: `${targetUser.name}님 환영합니다.` };
   };
 
-  // 데모 간편 로그인 (미사용 빈 함수)
-  const demoLogin = (_userId: string) => {};
+  // 데모 간편 로그인
+  const demoLogin = (userId: string) => {
+    const target = users.find((u) => u.id === userId);
+    if (target) {
+      setCurrentUserState(target);
+      setIsLoggedIn(true);
+      localStorage.removeItem("mc_logged_out");
+      localStorage.setItem("mc_current_user_id", target.id);
+    }
+  };
 
   // 회원가입 (Supabase DB + LocalStorage 동시 저장)
   const register = async (data: RegisterFormData): Promise<{ success: boolean; message: string }> => {
@@ -288,6 +312,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUsers(updatedUsers);
     setCurrentUserState(newUser);
     setIsLoggedIn(true);
+    localStorage.removeItem("mc_logged_out");
     localStorage.setItem("mc_current_user_id", newUser.id);
     saveToStorage(event, projects, investments, updatedUsers);
 
@@ -333,11 +358,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCurrentUserState(null);
     setIsLoggedIn(false);
     localStorage.removeItem("mc_current_user_id");
+    localStorage.setItem("mc_logged_out", "true");
   };
 
   const setCurrentUser = (user: User) => {
     setCurrentUserState(user);
     setIsLoggedIn(true);
+    localStorage.removeItem("mc_logged_out");
     localStorage.setItem("mc_current_user_id", user.id);
   };
 
