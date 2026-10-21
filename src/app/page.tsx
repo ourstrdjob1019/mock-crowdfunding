@@ -459,7 +459,7 @@ function MainDashboard() {
           <span className="text-[10px] mt-0.5 font-medium">내 팀</span>
         </button>
 
-        {currentUser?.role === "ADMIN" ? (
+        {currentUser?.role === "ADMIN" && (
           <button
             type="button"
             onClick={() => setCurrentTab("admin")}
@@ -469,15 +469,6 @@ function MainDashboard() {
           >
             <Sliders className="w-5 h-5" />
             <span className="text-[10px] mt-0.5 font-medium">운영관리</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsProjectorRankingOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition cursor-pointer text-amber-600 hover:text-amber-700"
-          >
-            <Trophy className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 font-bold">실시간 랭킹</span>
           </button>
         )}
       </nav>
@@ -510,8 +501,8 @@ function MainDashboard() {
         />
       )}
 
-      {/* 3. 16:9 Dark Projector Screen View (3D Podium) */}
-      {isProjectorRankingOpen && (
+      {/* 3. 16:9 Dark Projector Screen View (3D Podium - Admin only) */}
+      {isProjectorRankingOpen && currentUser?.role === "ADMIN" && (
         <RankingBoard onClose={() => setIsProjectorRankingOpen(false)} />
       )}
 

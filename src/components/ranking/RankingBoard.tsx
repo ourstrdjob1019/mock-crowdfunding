@@ -21,6 +21,25 @@ export const RankingBoard: React.FC<RankingBoardProps> = ({ onClose }) => {
     } catch {}
   }, []);
 
+  // 관리자 제외하고는 실시간 랭킹을 볼 수 없도록 차단
+  if (currentUser?.role !== "ADMIN") {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0B0F19] text-white flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl max-w-sm space-y-3 shadow-2xl">
+          <p className="text-base font-bold text-amber-400">⚠️ 관리자 전용 화면</p>
+          <p className="text-xs text-slate-300">실시간 종합 순위 전광판은 총괄 관리자만 열람할 수 있습니다.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition cursor-pointer"
+          >
+            돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const fireGrandConfetti = () => {
     const end = Date.now() + 3 * 1000;
     const colors = ["#F59E0B", "#FBBF24", "#06B6D4", "#3B82F6", "#8B5CF6", "#EC4899"];
