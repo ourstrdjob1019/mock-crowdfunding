@@ -115,7 +115,7 @@ function MainDashboard() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600" />
               </span>
-              <span className="hidden xs:inline">DEMODAY 2026 · LIVE</span>
+              <span className="hidden xs:inline">레디스타트업 · LIVE</span>
               <span className="xs:hidden">LIVE</span>
             </div>
 

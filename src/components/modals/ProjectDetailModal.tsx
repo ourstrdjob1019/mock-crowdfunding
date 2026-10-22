@@ -61,7 +61,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
     deleteProject,
   } = useApp();
 
-  const [investmentSliderVal, setInvestmentSliderVal] = useState<number>(2000);
+  const [investmentInputVal, setInvestmentInputVal] = useState<string>("2000");
+  const [investmentError, setInvestmentError] = useState<string>("");
   const [commentInput, setCommentInput] = useState<string>("");
   const [pdfSlideIndex, setPdfSlideIndex] = useState<number>(0);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
@@ -89,6 +90,92 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
     setTimeout(() => setToastNotice(null), 3000);
   };
 
+  // ★ 돈(지폐, 동전, 돈자루) 샤워 효과
+  const triggerMoneyEffect = () => {
+    try {
+      const scalar = 3.6;
+      const dollar = confetti.shapeFromText({ text: "💵", scalar });
+      const coin = confetti.shapeFromText({ text: "🪙", scalar });
+      const moneyBag = confetti.shapeFromText({ text: "💰", scalar });
+      const yen = confetti.shapeFromText({ text: "💴", scalar });
+
+      confetti({
+        shapes: [dollar, coin, moneyBag, yen],
+        scalar,
+        particleCount: 50,
+        spread: 90,
+        origin: { y: 0.6 },
+        ticks: 250,
+      });
+
+      setTimeout(() => {
+        confetti({
+          shapes: [dollar, coin],
+          scalar: 3.2,
+          particleCount: 45,
+          angle: 60,
+          spread: 80,
+          origin: { x: 0.1, y: 0.75 },
+          ticks: 260,
+        });
+        confetti({
+          shapes: [moneyBag, coin],
+          scalar: 3.2,
+          particleCount: 45,
+          angle: 120,
+          spread: 80,
+          origin: { x: 0.9, y: 0.75 },
+          ticks: 260,
+        });
+      }, 180);
+
+      setTimeout(() => {
+        confetti({
+          particleCount: 85,
+          spread: 120,
+          origin: { y: 0.55 },
+          colors: ["#F59E0B", "#FCD34D", "#10B981", "#3B82F6", "#FFFFFF"],
+          ticks: 280,
+        });
+      }, 350);
+    } catch (e) {
+      console.warn("Confetti fallback:", e);
+    }
+  };
+
+  // 직접 숫자 입력 핸들러 (2,000 ~ 5,000 제한)
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value.replace(/[^0-9]/g, "");
+    if (!rawVal) {
+      setInvestmentInputVal("");
+      return;
+    }
+
+    const numVal = parseInt(rawVal, 10);
+    if (numVal > 5000) {
+      setInvestmentInputVal("5000");
+      setInvestmentError("최대 투자 금액은 5,000 CR 입니다.");
+    } else {
+      setInvestmentInputVal(String(numVal));
+      if (numVal >= 2000 && numVal <= 5000) {
+        setInvestmentError("");
+      }
+    }
+  };
+
+  const handleAmountBlur = () => {
+    const num = parseInt(investmentInputVal, 10) || 0;
+    if (num < 2000) {
+      setInvestmentInputVal("2000");
+      setInvestmentError("최소 투자 금액은 2,000 CR 입니다.");
+    } else if (num > 5000) {
+      setInvestmentInputVal("5000");
+      setInvestmentError("");
+    } else {
+      setInvestmentError("");
+    }
+  };
+
   const handleInvestment = async (amount: number) => {
     if (event.currentStage !== "FUNDING_OPEN") {
       showToast("현재 단계에서는 모의투자를 진행할 수 없습니다.");
@@ -100,6 +187,11 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
       return;
     }
 
+    if (isNaN(amount) || amount < 2000 || amount > 5000) {
+      setInvestmentError("투자 금액은 최소 2,000 CR ~ 최대 5,000 CR 사이여야 합니다.");
+      return;
+    }
+
     if (amount > remainingCredits) {
       showToast("잔여 모의투자 크레딧이 부족합니다.");
       return;
@@ -107,12 +199,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
 
     const result = await invest(project.id, amount);
     if (result.success) {
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        colors: ["#3B82F6", "#06B6D4", "#F59E0B"],
-      });
-      showToast(result.message);
+      triggerMoneyEffect();
+      showToast(`💵 ${result.message}`);
     } else {
       showToast(result.message);
     }
@@ -603,48 +691,54 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                 /* NORMAL INVESTMENT FLOW */
                 <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-4 shadow-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">투자 금액 선택</span>
-                    <span className="text-xs font-mono font-bold text-blue-600">
-                      {investmentSliderVal.toLocaleString()} CR
+                    <span className="text-xs font-bold text-slate-800">투자 금액 직접 입력</span>
+                    <span className="text-[11px] font-semibold text-blue-600">
+                      2,000 ~ 5,000 CR
                     </span>
                   </div>
 
-                  {/* Slider 2,000 to 5,000 CR (Step 1,000) */}
-                  <div className="space-y-1">
+                  {/* 직접 숫자 입력 필드 (2,000 ~ 5,000 강제 제한) */}
+                  <div className="relative flex items-center">
                     <input
-                      type="range"
-                      min={2000}
-                      max={5000}
-                      step={1000}
-                      value={investmentSliderVal}
-                      onChange={(e) => setInvestmentSliderVal(Number(e.target.value))}
-                      className="w-full accent-blue-600 cursor-pointer"
+                      type="text"
+                      inputMode="numeric"
+                      value={investmentInputVal}
+                      onChange={handleAmountChange}
+                      onBlur={handleAmountBlur}
+                      placeholder="2000"
+                      className="w-full pl-4 pr-14 py-2.5 rounded-xl border border-slate-300 font-mono text-xl font-black text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
                     />
-                    <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                      <span>2,000 CR</span>
-                      <span>3,000 CR</span>
-                      <span>4,000 CR</span>
-                      <span>5,000 CR</span>
-                    </div>
+                    <span className="absolute right-3.5 text-xs font-bold text-slate-500 font-sans">
+                      CR
+                    </span>
                   </div>
 
                   {/* Quick preset buttons */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {[2000, 3000, 5000].map((preset) => (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[2000, 3000, 4000, 5000].map((preset) => (
                       <button
                         key={preset}
                         type="button"
-                        onClick={() => setInvestmentSliderVal(preset)}
+                        onClick={() => {
+                          setInvestmentInputVal(String(preset));
+                          setInvestmentError("");
+                        }}
                         className={`py-1.5 rounded-lg text-xs font-mono font-bold transition cursor-pointer border ${
-                          investmentSliderVal === preset
-                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          (parseInt(investmentInputVal, 10) || 0) === preset
+                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs scale-102"
                             : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                         }`}
                       >
-                        +{preset.toLocaleString()} CR
+                        {preset.toLocaleString()}
                       </button>
                     ))}
                   </div>
+
+                  {investmentError && (
+                    <p className="text-[11px] text-rose-600 font-medium">
+                      ⚠️ {investmentError}
+                    </p>
+                  )}
 
                   {/* Live remaining credits calculation */}
                   <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1 text-xs">
@@ -654,8 +748,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                     </div>
                     <div className="flex justify-between text-slate-700 font-bold pt-1 border-t border-slate-200">
                       <span>투자 후 잔여 예상:</span>
-                      <span className={`font-mono ${remainingCredits - investmentSliderVal < 0 ? "text-rose-600" : "text-blue-600"}`}>
-                        {(remainingCredits - investmentSliderVal).toLocaleString()} CR
+                      <span className={`font-mono ${(remainingCredits - (parseInt(investmentInputVal, 10) || 0)) < 0 ? "text-rose-600" : "text-blue-600"}`}>
+                        {(remainingCredits - (parseInt(investmentInputVal, 10) || 0)).toLocaleString()} CR
                       </span>
                     </div>
                   </div>
@@ -665,16 +759,18 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                     type="button"
                     disabled={
                       event.currentStage !== "FUNDING_OPEN" ||
-                      remainingCredits < investmentSliderVal
+                      remainingCredits < (parseInt(investmentInputVal, 10) || 0) ||
+                      (parseInt(investmentInputVal, 10) || 0) < 2000 ||
+                      (parseInt(investmentInputVal, 10) || 0) > 5000
                     }
-                    onClick={() => handleInvestment(investmentSliderVal)}
+                    onClick={() => handleInvestment(parseInt(investmentInputVal, 10) || 0)}
                     className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs sm:text-sm shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>{investmentSliderVal.toLocaleString()} CR 모의투자 참여하기</span>
+                    <span>{(parseInt(investmentInputVal, 10) || 0).toLocaleString()} CR 모의투자 참여하기</span>
                   </button>
 
-                  {remainingCredits < investmentSliderVal && (
+                  {remainingCredits < (parseInt(investmentInputVal, 10) || 0) && (
                     <p className="text-[11px] text-rose-500 text-center font-medium">
                       잔여 크레딧이 부족합니다. 좌측 지갑 리필을 이용하세요.
                     </p>
