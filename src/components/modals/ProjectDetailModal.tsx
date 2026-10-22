@@ -18,6 +18,9 @@ import {
   Edit3,
   Trash2,
   ExternalLink,
+  Video,
+  Play,
+  Users,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { PdfDetailViewer } from "@/components/ui/PdfDetailViewer";
@@ -29,6 +32,12 @@ const formatWebUrl = (url?: string): string => {
     return trimmed;
   }
   return `https://${trimmed}`;
+};
+
+const getYouTubeEmbedUrl = (url?: string): string | null => {
+  if (!url) return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=0&rel=0` : null;
 };
 
 interface ProjectDetailModalProps {
@@ -62,7 +71,13 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const isOwned = Boolean(
     project.isUserProject ||
       (currentUser.teamId && currentUser.teamId === project.teamId) ||
-      currentUser.id === project.authorId
+      currentUser.id === project.authorId ||
+      currentUser.email === project.authorEmail ||
+      (project.teamMemberIds && (
+        project.teamMemberIds.includes(currentUser.id) ||
+        project.teamMemberIds.includes(currentUser.email) ||
+        (currentUser.studentNumber && project.teamMemberIds.includes(currentUser.studentNumber))
+      ))
   );
 
   const canEdit = isOwned || currentUser.role === "ADMIN";
@@ -81,7 +96,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
     }
 
     if (isOwned) {
-      showToast("⚠️ 본인이 출품한 프로젝트에는 투자할 수 없습니다 (자가 투자 방지 정책).");
+      showToast("⚠️ 본인이 출품했거나 소속 팀원으로 등록된 프로젝트에는 투자할 수 없습니다 (팀원 자가 투자 방지 정책).");
       return;
     }
 
@@ -261,176 +276,223 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
               </div>
             )}
 
-            {/* FORMAT-SPECIFIC VIEWER */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  {project.landingFormat === "IMAGE" && <ImageIcon className="w-4 h-4 text-emerald-600" />}
-                  {project.landingFormat === "PDF" && <FileText className="w-4 h-4 text-indigo-600" />}
-                  {(project.landingFormat === "WEB" || project.landingFormat === "HTML") && <Globe className="w-4 h-4 text-cyan-600" />}
-                  <span>출품 자료 상세 뷰어 ({project.landingFormat === "HTML" ? "WEB/HTML" : project.landingFormat})</span>
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">2026 DEMODAY VIEWER</span>
-              </h3>
-
-              {/* 1. IMAGE FORMAT: E-Commerce / Wadiz Vertical Scroll Strip */}
-              {project.landingFormat === "IMAGE" && (
-                <div className="space-y-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 p-2">
-                  <div className="text-[11px] text-center text-slate-500 py-1 font-medium">
-                    ▼ 스크롤하여 상세 IR 인포그래픽을 확인하세요
-                  </div>
-                  {detailImages.map((imgUrl, idx) => (
-                    <div key={idx} className="relative rounded-xl overflow-hidden shadow-2xs">
-                      <img
-                        src={imgUrl}
-                        alt={`상세 ${idx + 1}`}
-                        className="w-full object-cover pointer-events-none"
-                      />
-                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">
-                        SECTION {idx + 1}
+            {/* ========================================================
+                ★ MULTI-MEDIA PRIORITY VIEWER (요구사항 2)
+                ======================================================== */}
+            <div className="space-y-6">
+              {project.mediaItems && project.mediaItems.length > 0 ? (
+                // 1) 다중 미디어 우선순위 렌더링
+                [...project.mediaItems]
+                  .sort((a, b) => a.priority - b.priority)
+                  .map((item, idx) => (
+                    <div key={item.id || idx} className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800 pb-1 border-b border-slate-200/80">
+                        <span className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-mono">
+                            {idx + 1}순위
+                          </span>
+                          {item.type === "IMAGE" && <ImageIcon className="w-4 h-4 text-emerald-600" />}
+                          {item.type === "PDF" && <FileText className="w-4 h-4 text-indigo-600" />}
+                          {item.type === "HTML" && <Globe className="w-4 h-4 text-cyan-600" />}
+                          {item.type === "VIDEO" && <Video className="w-4 h-4 text-rose-600" />}
+                          <span>{item.title || `${item.type} 컨텐츠`}</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">MEDIA #{idx + 1}</span>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
-              {/* 2. PDF FORMAT: 한 페이지씩 상세 슬라이드 및 세로 연속 뷰어 */}
-              {project.landingFormat === "PDF" && (
-                <div className="w-full">
-                  {project.landingUrl ? (
-                    <PdfDetailViewer
-                      url={project.landingUrl}
-                      title={`${project.title} - 출품 IR 피치덱`}
-                    />
-                  ) : (
-                    /* Fallback: 가상 슬라이드 뷰어 */
-                    <div className="rounded-xl border border-slate-200 bg-slate-900 text-white p-5 space-y-4 m-3">
-                      <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
-                        <span className="font-mono">PDF Slide Preview</span>
-                        <span>{pdfSlideIndex + 1} / {pdfSlides.length} Slides</span>
-                      </div>
-                      {pdfSlides[pdfSlideIndex] && (
-                        <div className="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
-                          <div className="text-amber-400 font-mono text-xs font-bold">
-                            {pdfSlides[pdfSlideIndex].title}
-                          </div>
-                          <div className="text-sm font-bold text-white">
-                            {pdfSlides[pdfSlideIndex].subtitle}
-                          </div>
-                          <p className="text-xs text-slate-300 leading-relaxed">
-                            {pdfSlides[pdfSlideIndex].content}
-                          </p>
+                      {/* A. IMAGE */}
+                      {item.type === "IMAGE" && (
+                        <div className="space-y-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 p-2">
+                          {(item.images && item.images.length > 0 ? item.images : [item.url]).map((imgUrl, imgIdx) => (
+                            <div key={imgIdx} className="relative rounded-xl overflow-hidden shadow-2xs">
+                              <img
+                                src={imgUrl}
+                                alt={`상세 ${imgIdx + 1}`}
+                                className="w-full object-cover"
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
-                      <div className="flex items-center justify-between pt-2">
-                        <button
-                          type="button"
-                          disabled={pdfSlideIndex === 0}
-                          onClick={() => setPdfSlideIndex((prev) => Math.max(0, prev - 1))}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" /> 이전
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pdfSlideIndex >= pdfSlides.length - 1}
-                          onClick={() => setPdfSlideIndex((prev) => prev + 1)}
-                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                        >
-                          다음 <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
+
+                      {/* B. PDF */}
+                      {item.type === "PDF" && (
+                        <div className="w-full">
+                          <PdfDetailViewer
+                            url={item.url}
+                            title={`${project.title} - 피치덱 PDF`}
+                          />
+                        </div>
+                      )}
+
+                      {/* C. HTML */}
+                      {item.type === "HTML" && (
+                        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+                          <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-xs">
+                            <span className="font-mono text-slate-600 truncate">
+                              {item.fileName ? `HTML 파일: ${item.fileName}` : formatWebUrl(item.url)}
+                            </span>
+                            {item.url && (
+                              <a
+                                href={formatWebUrl(item.url)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center gap-1 shadow-2xs"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>새 창 열기</span>
+                              </a>
+                            )}
+                          </div>
+                          <div className="p-2 sm:p-3">
+                            <div className="relative w-full h-[500px] sm:h-[620px] rounded-xl overflow-hidden border border-slate-200 bg-white shadow-inner">
+                              {item.htmlContent ? (
+                                <iframe
+                                  srcDoc={item.htmlContent}
+                                  title={`${project.title} Uploaded HTML`}
+                                  className="w-full h-full border-0"
+                                  sandbox="allow-scripts allow-forms allow-same-origin"
+                                />
+                              ) : (
+                                <iframe
+                                  src={formatWebUrl(item.url)}
+                                  title={`${project.title} Web Prototype`}
+                                  className="w-full h-full border-0"
+                                  sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* D. VIDEO */}
+                      {item.type === "VIDEO" && (
+                        <div className="rounded-2xl border border-slate-200 bg-black overflow-hidden shadow-md">
+                          {getYouTubeEmbedUrl(item.url) ? (
+                            <div className="relative w-full aspect-video">
+                              <iframe
+                                src={getYouTubeEmbedUrl(item.url)!}
+                                title={`${project.title} YouTube Video`}
+                                className="w-full h-full border-0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          ) : (
+                            <video
+                              src={item.url}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="w-full max-h-[500px] object-contain mx-auto"
+                            />
+                          )}
+                          <div className="bg-slate-900 px-4 py-2 text-[11px] text-slate-400 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-white font-medium">
+                              <Play className="w-3 h-3 text-rose-500 fill-rose-500" />
+                              {item.fileName || "프로젝트 소개 영상"}
+                            </span>
+                            <span className="font-mono text-slate-500">VIDEO PLAYER</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+              ) : (
+                // 2) 구버전 단일 포맷 하위 호환 렌더링
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 flex items-center justify-between mb-3">
+                    <span className="flex items-center gap-1.5">
+                      {project.landingFormat === "IMAGE" && <ImageIcon className="w-4 h-4 text-emerald-600" />}
+                      {project.landingFormat === "PDF" && <FileText className="w-4 h-4 text-indigo-600" />}
+                      {(project.landingFormat === "WEB" || project.landingFormat === "HTML") && <Globe className="w-4 h-4 text-cyan-600" />}
+                      {project.landingFormat === "VIDEO" && <Video className="w-4 h-4 text-rose-600" />}
+                      <span>출품 자료 상세 뷰어 ({project.landingFormat})</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">2026 DEMODAY VIEWER</span>
+                  </h3>
+
+                  {/* 구버전 이미지 */}
+                  {project.landingFormat === "IMAGE" && (
+                    <div className="space-y-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 p-2">
+                      {detailImages.map((imgUrl, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden shadow-2xs">
+                          <img src={imgUrl} alt={`상세 ${idx + 1}`} className="w-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 구버전 PDF */}
+                  {project.landingFormat === "PDF" && (
+                    <div className="w-full">
+                      {project.landingUrl ? (
+                        <PdfDetailViewer url={project.landingUrl} title={`${project.title} - 출품 IR 피치덱`} />
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* 구버전 WEB/HTML */}
+                  {(project.landingFormat === "WEB" || project.landingFormat === "HTML") && (
+                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+                      <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-xs">
+                        <span className="font-mono text-slate-700 truncate">{formatWebUrl(project.landingUrl || project.webDemoUrl)}</span>
+                        {formatWebUrl(project.landingUrl || project.webDemoUrl) && (
+                          <a
+                            href={formatWebUrl(project.landingUrl || project.webDemoUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-semibold flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>새 탭 열기</span>
+                          </a>
+                        )}
+                      </div>
+                      <div className="p-2 sm:p-3">
+                        <iframe
+                          src={formatWebUrl(project.landingUrl || project.webDemoUrl)}
+                          title={`${project.title} Web Prototype`}
+                          className="w-full h-[550px] border-0 rounded-xl"
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        />
                       </div>
                     </div>
                   )}
                 </div>
               )}
-
-              {/* 3. WEB / HTML FORMAT: 실제 인터랙티브 웹페이지 iframe 뷰어 */}
-              {(project.landingFormat === "WEB" || project.landingFormat === "HTML") && (
-                <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
-                  {/* Browser address bar */}
-                  <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                      </div>
-                      <div className="flex-1 bg-white px-3 py-1 rounded-md text-[11px] font-mono text-slate-700 border border-slate-200 truncate flex items-center justify-between">
-                        <span className="truncate">{formatWebUrl(project.landingUrl || project.webDemoUrl) || "https://..."}</span>
-                        <span className="text-[10px] text-emerald-600 font-bold shrink-0 ml-2">LIVE DEMO</span>
-                      </div>
-                    </div>
-
-                    {/* 새 탭에서 열기 버튼 */}
-                    {formatWebUrl(project.landingUrl || project.webDemoUrl) && (
-                      <a
-                        href={formatWebUrl(project.landingUrl || project.webDemoUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs shrink-0"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>새 탭에서 사이트 열기</span>
-                      </a>
-                    )}
-                  </div>
-
-                  {/* 실제 웹페이지 iframe 렌더링 */}
-                  <div className="p-2 sm:p-3 space-y-2">
-                    {formatWebUrl(project.landingUrl || project.webDemoUrl) ? (
-                      <div className="relative w-full h-[550px] sm:h-[650px] rounded-xl overflow-hidden border border-slate-200 bg-white shadow-inner">
-                        <iframe
-                          src={formatWebUrl(project.landingUrl || project.webDemoUrl)}
-                          title={`${project.title} Web Prototype`}
-                          className="w-full h-full border-0"
-                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                        />
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                        <Globe className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                        <p className="text-xs font-semibold text-slate-600">등록된 웹페이지 URL이 없습니다.</p>
-                      </div>
-                    )}
-
-                    {/* 보안 정책(X-Frame-Options) 안내 배너 */}
-                    <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                      <span className="text-slate-600">
-                        💡 외부 사이트의 보안 정책(X-Frame-Options)으로 인해 인앱 뷰어가 차단될 경우 우측의 <strong>새 탭에서 사이트 열기</strong>를 클릭하세요.
-                      </span>
-                      {formatWebUrl(project.landingUrl || project.webDemoUrl) && (
-                        <a
-                          href={formatWebUrl(project.landingUrl || project.webDemoUrl)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-700 font-bold underline shrink-0 hover:text-blue-900"
-                        >
-                          직접 사이트 방문하기 ↗
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Team Members */}
-            {project.teamMembers && project.teamMembers.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <h3 className="text-xs font-bold text-slate-900">팀 구성원 (Founding Team)</h3>
+            {/* Team Members & Details */}
+            {((project.teamMemberDetails && project.teamMemberDetails.length > 0) || (project.teamMembers && project.teamMembers.length > 0)) && (
+              <div className="space-y-2 pt-3 border-t border-slate-200">
+                <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
+                  소속 팀원 정보 (Team Members)
+                </h3>
                 <div className="flex flex-wrap gap-2">
-                  {project.teamMembers.map((mem, mi) => (
-                    <div key={mi} className="px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-800 flex items-center gap-1.5">
-                      <span className="font-bold text-slate-900">{mem.name}</span>
-                      <span className="text-slate-400">|</span>
-                      <span className="text-slate-500 text-[11px]">{mem.role}</span>
-                    </div>
-                  ))}
+                  {project.teamMemberDetails && project.teamMemberDetails.length > 0 ? (
+                    project.teamMemberDetails.map((mem, mi) => (
+                      <div key={mi} className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-950 flex items-center gap-1.5">
+                        <span className="font-bold text-indigo-900">{mem.name}</span>
+                        {mem.department && <span className="text-indigo-400">|</span>}
+                        {mem.department && <span className="text-indigo-700 text-[11px]">{mem.department}</span>}
+                        {mem.studentNumber && <span className="text-indigo-500 font-mono text-[10px]">({mem.studentNumber})</span>}
+                      </div>
+                    ))
+                  ) : (
+                    project.teamMembers?.map((mem, mi) => (
+                      <div key={mi} className="px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-800 flex items-center gap-1.5">
+                        <span className="font-bold text-slate-900">{mem.name}</span>
+                        <span className="text-slate-400">|</span>
+                        <span className="text-slate-500 text-[11px]">{mem.role}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
-
             {/* Cheering Comments & Discussion */}
             <div className="space-y-3 pt-3 border-t border-slate-100">
               <h3 className="text-xs font-bold text-slate-900 flex items-center justify-between">

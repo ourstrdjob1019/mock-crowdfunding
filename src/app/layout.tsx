@@ -22,8 +22,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CROWDFUND · 2026 대학 스타트업 데모데이 모의 크라우드펀딩",
-  description: "2026 University Startup Demo Day Mock Crowdfunding Platform",
+  title: "레디스타트업 · 클라우드펀딩 플랫폼",
+  description: "레디스타트업 - 2026 대학 스타트업 데모데이 모의 크라우드펀딩 플랫폼",
 };
 
 export const viewport: Viewport = {

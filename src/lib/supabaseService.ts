@@ -21,6 +21,12 @@ export function mapDbProjectToModel(row: any): Project {
     authorId: row.author_id,
     authorName: row.author_name,
     authorEmail: row.author_email,
+    category: row.category || "AI/SaaS",
+    targetCredits: Number(row.target_credits) || 20000,
+    pitchHighlights: Array.isArray(row.pitch_highlights) ? row.pitch_highlights : [],
+    teamMemberIds: Array.isArray(row.team_member_ids) ? row.team_member_ids : [],
+    teamMemberDetails: Array.isArray(row.team_member_details) ? row.team_member_details : [],
+    mediaItems: Array.isArray(row.media_items) ? row.media_items : [],
     lastModifierName: row.last_modifier_name,
     lastModifiedAt: row.last_modified_at,
     isHidden: Boolean(row.is_hidden),
@@ -49,6 +55,12 @@ export function mapModelProjectToDb(proj: Partial<Project>): Record<string, any>
   if (proj.authorId !== undefined) dbData.author_id = proj.authorId;
   if (proj.authorName !== undefined) dbData.author_name = proj.authorName;
   if (proj.authorEmail !== undefined) dbData.author_email = proj.authorEmail;
+  if (proj.category !== undefined) dbData.category = proj.category;
+  if (proj.targetCredits !== undefined) dbData.target_credits = proj.targetCredits;
+  if (proj.pitchHighlights !== undefined) dbData.pitch_highlights = proj.pitchHighlights;
+  if (proj.teamMemberIds !== undefined) dbData.team_member_ids = proj.teamMemberIds;
+  if (proj.teamMemberDetails !== undefined) dbData.team_member_details = proj.teamMemberDetails;
+  if (proj.mediaItems !== undefined) dbData.media_items = proj.mediaItems;
   if (proj.lastModifierName !== undefined) dbData.last_modifier_name = proj.lastModifierName;
   if (proj.lastModifiedAt !== undefined) dbData.last_modified_at = proj.lastModifiedAt;
   if (proj.isHidden !== undefined) dbData.is_hidden = proj.isHidden;

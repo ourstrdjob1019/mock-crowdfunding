@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Project, LandingFormat, ProjectCategory } from "@/types";
+import { Project, LandingFormat, ProjectCategory, MediaType, ProjectMediaItem, TeamMemberDetail } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
 import { uploadThumbnail, uploadLandingFile } from "@/lib/supabase";
@@ -13,9 +13,17 @@ import {
   Globe, 
   Trash2, 
   Plus, 
-  AlertCircle,
+  Minus,
+  AlertCircle, 
   Sparkles,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Video,
+  Users,
+  Check,
+  CheckCircle2,
+  Film,
+  Play,
+  ArrowUpDown
 } from "lucide-react";
 
 interface ProjectFormModalProps {
@@ -29,7 +37,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   onClose,
   editProject,
 }) => {
-  const { currentUser, createProject, updateProject, deleteProject } = useApp();
+  const { currentUser, users, roster, createProject, updateProject, deleteProject } = useApp();
 
   const isEditing = Boolean(editProject);
 
@@ -42,9 +50,55 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const [highlight1, setHighlight1] = useState("");
   const [highlight2, setHighlight2] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [landingFormat, setLandingFormat] = useState<LandingFormat>("IMAGE");
-  const [landingUrl, setLandingUrl] = useState("");
-  const [landingImages, setLandingImages] = useState<string[]>([]);
+
+  // 1. 팀원 관리 상태
+  const [showMemberSettings, setShowMemberSettings] = useState(false);
+  const [memberInputs, setMemberInputs] = useState<string[]>([""]);
+  const [resolvedMembers, setResolvedMembers] = useState<TeamMemberDetail[]>([]);
+  const [memberLookupMessage, setMemberLookupMessage] = useState<string>("");
+
+  // 2. 미디어 4종 다중 선택 및 우선순위 (1~4)
+  const [enabledMedia, setEnabledMedia] = useState<{
+    IMAGE: boolean;
+    PDF: boolean;
+    HTML: boolean;
+    VIDEO: boolean;
+  }>({
+    IMAGE: true,
+    PDF: false,
+    HTML: false,
+    VIDEO: false,
+  });
+
+  const [priorities, setPriorities] = useState<{
+    IMAGE: number;
+    PDF: number;
+    HTML: number;
+    VIDEO: number;
+  }>({
+    IMAGE: 1,
+    PDF: 2,
+    HTML: 3,
+    VIDEO: 4,
+  });
+
+  // 미디어별 세부 데이터
+  // A. 이미지
+  const [mediaImages, setMediaImages] = useState<string[]>([]);
+  const [mediaImageUrl, setMediaImageUrl] = useState<string>("");
+
+  // B. PDF
+  const [mediaPdfUrl, setMediaPdfUrl] = useState<string>("");
+
+  // C. HTML
+  const [mediaHtmlUrl, setMediaHtmlUrl] = useState<string>("");
+  const [mediaHtmlContent, setMediaHtmlContent] = useState<string>("");
+  const [mediaHtmlFileName, setMediaHtmlFileName] = useState<string>("");
+
+  // D. 동영상
+  const [mediaVideoUrl, setMediaVideoUrl] = useState<string>("");
+  const [mediaVideoType, setMediaVideoType] = useState<"FILE" | "URL">("FILE");
+  const [mediaVideoFileName, setMediaVideoFileName] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -61,9 +115,85 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setHighlight1(editProject.pitchHighlights?.[0] || "");
       setHighlight2(editProject.pitchHighlights?.[1] || "");
       setThumbnailUrl(editProject.thumbnailUrl);
-      setLandingFormat(editProject.landingFormat);
-      setLandingUrl(editProject.landingUrl);
-      setLandingImages(editProject.landingImages || [editProject.landingUrl]);
+
+      // 팀원 데이터 복원
+      if (editProject.teamMemberDetails && editProject.teamMemberDetails.length > 0) {
+        setResolvedMembers(editProject.teamMemberDetails);
+        setMemberInputs(editProject.teamMemberDetails.map(m => m.email || m.id));
+      } else if (editProject.teamMemberIds && editProject.teamMemberIds.length > 0) {
+        // ID 기반 조회 복원
+        const matched = editProject.teamMemberIds.map(id => {
+          const u = users.find(user => user.id === id || user.email === id);
+          if (u) {
+            return {
+              id: u.id,
+              email: u.email,
+              name: u.name,
+              department: u.department,
+              studentNumber: u.studentNumber,
+            };
+          }
+          return { id, email: id, name: "팀원", department: "", studentNumber: "" };
+        });
+        setResolvedMembers(matched);
+        setMemberInputs(matched.map(m => m.email || m.id));
+      } else {
+        setResolvedMembers([]);
+        setMemberInputs([""]);
+      }
+
+      // 미디어 아이템 복원
+      if (editProject.mediaItems && editProject.mediaItems.length > 0) {
+        const newEnabled = { IMAGE: false, PDF: false, HTML: false, VIDEO: false };
+        const newPriorities = { IMAGE: 1, PDF: 2, HTML: 3, VIDEO: 4 };
+
+        editProject.mediaItems.forEach(item => {
+          if (item.type in newEnabled) {
+            newEnabled[item.type] = true;
+            newPriorities[item.type] = item.priority;
+
+            if (item.type === "IMAGE") {
+              setMediaImages(item.images || [item.url].filter(Boolean));
+              setMediaImageUrl(item.url || "");
+            } else if (item.type === "PDF") {
+              setMediaPdfUrl(item.url || "");
+            } else if (item.type === "HTML") {
+              setMediaHtmlUrl(item.url || "");
+              setMediaHtmlContent(item.htmlContent || "");
+              setMediaHtmlFileName(item.fileName || "");
+            } else if (item.type === "VIDEO") {
+              setMediaVideoUrl(item.url || "");
+              setMediaVideoType(item.videoType || "FILE");
+              setMediaVideoFileName(item.fileName || "");
+            }
+          }
+        });
+
+        setEnabledMedia(newEnabled);
+        setPriorities(newPriorities);
+      } else {
+        // 기존 단일 landingFormat 기반 마이그레이션 복원
+        const fmt = editProject.landingFormat;
+        const isPdf = fmt === "PDF";
+        const isHtml = fmt === "HTML" || fmt === "WEB";
+        const isImg = fmt === "IMAGE" || (!isPdf && !isHtml);
+
+        setEnabledMedia({
+          IMAGE: isImg,
+          PDF: isPdf,
+          HTML: isHtml,
+          VIDEO: false,
+        });
+
+        if (isImg) {
+          setMediaImages(editProject.landingImages || [editProject.landingUrl].filter(Boolean));
+          setMediaImageUrl(editProject.landingUrl || "");
+        } else if (isPdf) {
+          setMediaPdfUrl(editProject.landingUrl || "");
+        } else if (isHtml) {
+          setMediaHtmlUrl(editProject.landingUrl || "");
+        }
+      }
     } else {
       // 신규 등록 기본값
       setTitle("");
@@ -75,22 +205,47 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setHighlight1("");
       setHighlight2("");
       setThumbnailUrl("https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80");
-      setLandingFormat("IMAGE");
-      setLandingUrl("");
-      setLandingImages([]);
+      
+      // 팀원 기본값
+      setResolvedMembers([]);
+      setMemberInputs([""]);
+      setShowMemberSettings(false);
+      setMemberLookupMessage("");
+
+      // 미디어 기본값 (이미지 1순위)
+      setEnabledMedia({
+        IMAGE: true,
+        PDF: false,
+        HTML: false,
+        VIDEO: false,
+      });
+      setPriorities({
+        IMAGE: 1,
+        PDF: 2,
+        HTML: 3,
+        VIDEO: 4,
+      });
+      setMediaImages([]);
+      setMediaImageUrl("");
+      setMediaPdfUrl("");
+      setMediaHtmlUrl("");
+      setMediaHtmlContent("");
+      setMediaHtmlFileName("");
+      setMediaVideoUrl("");
+      setMediaVideoType("FILE");
+      setMediaVideoFileName("");
     }
     setErrorMessage("");
   }, [editProject, currentUser, isOpen]);
 
   if (!isOpen) return null;
 
-  // 1. 대표 썸네일 파일 업로드 처리
+  // 1. 대표 썸네일 업로드
   const handleThumbnailFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadStatus("썸네일 이미지 처리 중...");
-    // 1차: FileReader로 즉각적인 base64 미리보기 적용
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -99,59 +254,133 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     };
     reader.readAsDataURL(file);
 
-    // 2차: Supabase Storage 업로드 시도 (설정된 경우)
     try {
       const res = await uploadThumbnail(file);
       if (res.url) {
         setThumbnailUrl(res.url);
-      } else if (res.error) {
-        setErrorMessage(`⚠️ Storage 업로드 실패: ${res.error} (제공된 fix_all.sql 실행 후 다시 시도해 주세요. 현재는 로컬 미리보기로 저장됩니다)`);
       }
     } catch (err: any) {
-      setErrorMessage(`⚠️ 업로드 중 예외 발생: ${err.message || err}`);
+      console.warn("Thumbnail upload warning:", err);
     } finally {
       setUploadStatus("");
     }
   };
 
-  // 2. 상세 이미지 다중 업로드 처리 (G마켓 스타일 세로 상세페이지)
+  // 2. 팀원 조회 및 확인
+  const handleSaveTeamMembers = () => {
+    setMemberLookupMessage("");
+    const trimmedInputs = memberInputs.map(s => s.trim()).filter(Boolean);
+
+    if (trimmedInputs.length === 0) {
+      setResolvedMembers([]);
+      setMemberLookupMessage("등록된 추가 팀원이 없습니다.");
+      return;
+    }
+
+    const matched: TeamMemberDetail[] = [];
+    const notFound: string[] = [];
+
+    trimmedInputs.forEach(inputVal => {
+      // 1) users에서 email, id, studentNumber 대조
+      const foundUser = users.find(u => 
+        u.email.toLowerCase() === inputVal.toLowerCase() ||
+        u.id.toLowerCase() === inputVal.toLowerCase() ||
+        (u.studentNumber && u.studentNumber === inputVal)
+      );
+
+      if (foundUser) {
+        matched.push({
+          id: foundUser.id,
+          email: foundUser.email,
+          name: foundUser.name,
+          department: foundUser.department,
+          studentNumber: foundUser.studentNumber,
+        });
+        return;
+      }
+
+      // 2) roster에서 대조
+      const foundRoster = roster.find(r => 
+        r.email.toLowerCase() === inputVal.toLowerCase() ||
+        (r.studentNumber && r.studentNumber === inputVal)
+      );
+
+      if (foundRoster) {
+        matched.push({
+          id: foundRoster.email,
+          email: foundRoster.email,
+          name: foundRoster.name,
+          department: foundRoster.department,
+          studentNumber: foundRoster.studentNumber,
+        });
+        return;
+      }
+
+      notFound.push(inputVal);
+    });
+
+    // 중복 제거
+    const uniqueMatched = matched.filter((v, idx, arr) => 
+      arr.findIndex(item => item.email.toLowerCase() === v.email.toLowerCase()) === idx
+    );
+
+    setResolvedMembers(uniqueMatched);
+
+    if (notFound.length > 0) {
+      setMemberLookupMessage(`⚠️ 존재하지 않는 아이디/이메일: [${notFound.join(", ")}]. 가입된 계정인지 확인해주세요.`);
+    } else {
+      setMemberLookupMessage(`✅ ${uniqueMatched.length}명의 팀원이 정상 등록되었습니다.`);
+    }
+  };
+
+  const handleAddMemberInput = () => {
+    setMemberInputs(prev => [...prev, ""]);
+  };
+
+  const handleRemoveMemberInput = (index: number) => {
+    setMemberInputs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMemberInputChange = (index: number, val: string) => {
+    setMemberInputs(prev => {
+      const next = [...prev];
+      next[index] = val;
+      return next;
+    });
+  };
+
+  // 3. 미디어 파일 업로드 핸들러들
+  // A. 이미지 다중 업로드
   const handleDetailImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setUploadStatus("상세 이미지 로딩 및 업로드 중...");
-    const newImageUrls: string[] = [];
+    setUploadStatus("상세 이미지 처리 중...");
+    const newUrls: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const dataUrl = await new Promise<string>((resolve) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.readAsDataURL(file);
+      const reader = new FileReader();
+      const readPromise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
       });
-      newImageUrls.push(dataUrl);
+      reader.readAsDataURL(file);
+      const dataUrl = await readPromise;
+      newUrls.push(dataUrl);
 
-      // Supabase 업로드 병행
-      try {
-        const res = await uploadLandingFile(file);
+      // Storage 업로드 백그라운드
+      uploadLandingFile(file).then(res => {
         if (res.url) {
-          newImageUrls[newImageUrls.length - 1] = res.url;
-        } else if (res.error) {
-          setErrorMessage(`⚠️ 상세이미지 Storage 업로드 오류: ${res.error}`);
+          setMediaImages(prev => prev.map(u => u === dataUrl ? res.url! : u));
         }
-      } catch {
-        // base64 유지
-      }
+      });
     }
 
-    setLandingImages((prev) => [...prev, ...newImageUrls]);
-    if (!landingUrl && newImageUrls.length > 0) {
-      setLandingUrl(newImageUrls[0]);
-    }
+    setMediaImages(prev => [...prev, ...newUrls]);
     setUploadStatus("");
   };
 
-  // 3. PDF 파일 업로드 처리
+  // B. PDF 업로드
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -160,7 +389,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setLandingUrl(reader.result);
+        setMediaPdfUrl(reader.result);
       }
     };
     reader.readAsDataURL(file);
@@ -168,17 +397,69 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     try {
       const res = await uploadLandingFile(file);
       if (res.url) {
-        setLandingUrl(res.url);
-      } else if (res.error) {
-        setErrorMessage(`⚠️ PDF Storage 업로드 오류: ${res.error}`);
+        setMediaPdfUrl(res.url);
       }
     } catch (err: any) {
-      setErrorMessage(`⚠️ PDF 업로드 예외: ${err.message}`);
+      console.warn("PDF upload warning:", err);
     } finally {
       setUploadStatus("");
     }
   };
 
+  // C. HTML 파일 업로드
+  const handleHtmlFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setMediaHtmlFileName(file.name);
+    setUploadStatus("HTML 파일 읽는 중...");
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setMediaHtmlContent(reader.result);
+      }
+    };
+    reader.readAsText(file);
+
+    try {
+      const res = await uploadLandingFile(file);
+      if (res.url) {
+        setMediaHtmlUrl(res.url);
+      }
+    } catch (err: any) {
+      console.warn("HTML upload warning:", err);
+    } finally {
+      setUploadStatus("");
+    }
+  };
+
+  // D. 동영상 파일 업로드
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setMediaVideoFileName(file.name);
+    setUploadStatus("동영상 파일 처리 및 Storage 업로드 중...");
+
+    // 즉시 미리보기를 위한 Blob URL
+    const blobUrl = URL.createObjectURL(file);
+    setMediaVideoUrl(blobUrl);
+    setMediaVideoType("FILE");
+
+    try {
+      const res = await uploadLandingFile(file);
+      if (res.url) {
+        setMediaVideoUrl(res.url);
+      }
+    } catch (err: any) {
+      console.warn("Video upload warning:", err);
+    } finally {
+      setUploadStatus("");
+    }
+  };
+
+  // 4. 저장 제출 처리
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
@@ -193,29 +474,82 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       return;
     }
 
-    let finalLandingUrl = landingUrl;
-    let finalLandingImages = landingImages;
-
-    if (landingFormat === "IMAGE") {
-      if (landingImages.length === 0 && !landingUrl) {
-        setErrorMessage("상세페이지 이미지를 1장 이상 등록하거나 URL을 입력해 주세요.");
-        return;
-      }
-      finalLandingUrl = landingUrl || landingImages[0] || thumbnailUrl;
-      if (finalLandingImages.length === 0) {
-        finalLandingImages = [finalLandingUrl];
-      }
-    } else if (landingFormat === "PDF") {
-      if (!landingUrl.trim()) {
-        setErrorMessage("PDF 문서를 업로드하거나 PDF URL을 입력해 주세요.");
-        return;
-      }
-    } else if (landingFormat === "HTML") {
-      if (!landingUrl.trim()) {
-        setErrorMessage("시연 웹페이지 URL(HTML)을 입력해 주세요.");
-        return;
-      }
+    // 선택된 미디어 검증
+    const hasAnyMedia = Object.values(enabledMedia).some(Boolean);
+    if (!hasAnyMedia) {
+      setErrorMessage("최소 1개 이상의 미디어 포맷(이미지, PDF, HTML, 동영상)을 선택해주세요.");
+      return;
     }
+
+    // 우선순위 정렬 및 mediaItems 구성
+    const items: ProjectMediaItem[] = [];
+
+    if (enabledMedia.IMAGE) {
+      const imgUrl = mediaImageUrl.trim() || mediaImages[0] || thumbnailUrl;
+      items.push({
+        id: "media-img",
+        type: "IMAGE",
+        priority: priorities.IMAGE,
+        title: "상세 이미지",
+        url: imgUrl,
+        images: mediaImages.length > 0 ? mediaImages : [imgUrl],
+      });
+    }
+
+    if (enabledMedia.PDF) {
+      if (!mediaPdfUrl.trim()) {
+        setErrorMessage("PDF 문서를 선택했으나 파일이나 URL이 등록되지 않았습니다.");
+        return;
+      }
+      items.push({
+        id: "media-pdf",
+        type: "PDF",
+        priority: priorities.PDF,
+        title: "IR 피치덱 PDF",
+        url: mediaPdfUrl.trim(),
+      });
+    }
+
+    if (enabledMedia.HTML) {
+      if (!mediaHtmlUrl.trim() && !mediaHtmlContent.trim()) {
+        setErrorMessage("HTML 포맷을 선택했으나 파일이나 URL이 등록되지 않았습니다.");
+        return;
+      }
+      items.push({
+        id: "media-html",
+        type: "HTML",
+        priority: priorities.HTML,
+        title: "시연 웹페이지 (HTML)",
+        url: mediaHtmlUrl.trim(),
+        htmlContent: mediaHtmlContent,
+        fileName: mediaHtmlFileName,
+      });
+    }
+
+    if (enabledMedia.VIDEO) {
+      if (!mediaVideoUrl.trim()) {
+        setErrorMessage("동영상 포맷을 선택했으나 영상 파일이나 URL이 등록되지 않았습니다.");
+        return;
+      }
+      items.push({
+        id: "media-video",
+        type: "VIDEO",
+        priority: priorities.VIDEO,
+        title: "프로젝트 소개 영상",
+        url: mediaVideoUrl.trim(),
+        videoType: mediaVideoType,
+        fileName: mediaVideoFileName,
+      });
+    }
+
+    // 우선순위 정렬
+    items.sort((a, b) => a.priority - b.priority);
+
+    // 하위 호환을 위한 대표 포맷 설정
+    const topItem = items[0];
+    const topFormat: LandingFormat = topItem ? topItem.type : "IMAGE";
+    const topUrl = topItem ? topItem.url : thumbnailUrl;
+    const topImages = topItem && topItem.type === "IMAGE" ? (topItem.images || [topUrl]) : [];
 
     setIsSubmitting(true);
 
@@ -224,6 +558,8 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       if (highlights.length === 0) {
         highlights.push("2026 데모데이 출품작 및 시장 검증 진행");
       }
+
+      const teamMemberIds = resolvedMembers.map(m => m.id);
 
       if (isEditing && editProject) {
         const res = await updateProject({
@@ -236,22 +572,25 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           targetCredits: Number(targetCredits) || 20000,
           pitchHighlights: highlights,
           thumbnailUrl: thumbnailUrl.trim(),
-          landingFormat,
-          landingUrl: finalLandingUrl,
-          landingImages: finalLandingImages,
+          landingFormat: topFormat,
+          landingUrl: topUrl,
+          landingImages: topImages,
+          teamMemberIds,
+          teamMemberDetails: resolvedMembers,
+          mediaItems: items,
         });
 
-        setIsSubmitting(false);
-        if (!res.success) {
-          setErrorMessage(res.message);
-        } else {
+        if (res.success) {
           onClose();
+        } else {
+          setErrorMessage(res.message);
         }
       } else {
         const res = await createProject({
-          teamId: currentUser?.teamId || `team-${Date.now().toString().slice(-4)}`,
-          teamName: teamName.trim() || `${currentUser?.name} 팀`,
-          teamNumber: 1, // AppContext에서 자동 계산
+          eventId: "evt-2026-fall-01",
+          teamId: currentUser?.teamId || `team-${Date.now()}`,
+          teamName: teamName.trim() || `${currentUser?.name || "학생"} 팀`,
+          teamNumber: 1,
           title: title.trim(),
           summary: summary.trim(),
           description: description.trim(),
@@ -259,423 +598,625 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           targetCredits: Number(targetCredits) || 20000,
           pitchHighlights: highlights,
           thumbnailUrl: thumbnailUrl.trim(),
-          landingFormat,
-          landingUrl: finalLandingUrl,
-          landingImages: finalLandingImages,
+          landingFormat: topFormat,
+          landingUrl: topUrl,
+          landingImages: topImages,
+          authorId: currentUser?.id,
+          authorName: currentUser?.name,
+          authorEmail: currentUser?.email,
+          teamMemberIds,
+          teamMemberDetails: resolvedMembers,
+          mediaItems: items,
         });
 
-        setIsSubmitting(false);
-        if (!res.success) {
-          setErrorMessage(res.message);
-        } else {
+        if (res.success) {
           onClose();
+        } else {
+          setErrorMessage(res.message);
         }
       }
     } catch (err: any) {
+      setErrorMessage(`저장 실패: ${err.message || err}`);
+    } finally {
       setIsSubmitting(false);
-      setErrorMessage(err.message || "프로젝트 저장 중 오류가 발생했습니다.");
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!editProject) return;
-    if (confirm("정말로 이 프로젝트를 삭제하시겠습니까? 관련 펀딩 내역도 함께 정리됩니다.")) {
-      const res = await deleteProject(editProject.id);
-      if (res.success) {
-        onClose();
-      } else {
-        setErrorMessage(res.message);
-      }
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-      <div className="bg-white rounded-3xl border border-slate-200/90 w-full max-w-3xl relative shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
-        {/* 모달 헤더 */}
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white rounded-3xl border border-slate-200/90 w-full max-w-3xl my-8 overflow-hidden shadow-2xl transition-all">
+        {/* 모달 상단 헤더 */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-accent-gradient text-white flex items-center justify-center shadow-accent">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
               <Sparkles size={16} />
             </div>
             <div>
-              <h2 className="font-display text-lg font-bold text-slate-900 leading-tight">
-                {isEditing ? "프로젝트 게시글 수정" : "새 프로젝트 출품 등록"}
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                {isEditing ? "프로젝트 출품작 정보 수정" : "새 프로젝트 데모 등록"}
               </h2>
-              <p className="text-[11px] font-mono text-slate-500">
-                작성자: <strong>{currentUser?.name}</strong> ({currentUser?.email})
+              <p className="text-xs text-slate-500">
+                팀원 설정 및 4종 미디어(이미지, PDF, HTML, 동영상) 우선순위 배치가 가능합니다.
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {isEditing && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
-                title="프로젝트 삭제"
-              >
-                <Trash2 size={16} /> <span className="hidden sm:inline">삭제</span>
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* 폼 본문 (스크롤 영역) */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1">
+        {/* 폼 본문 */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           {errorMessage && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-start gap-2.5">
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
               <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {uploadStatus && (
-            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs flex items-center gap-2">
+              <span className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
               <span>{uploadStatus}</span>
             </div>
           )}
 
-          {/* 1. 기본 정보 */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                프로젝트(출품작) 제목 *
+          {/* 1. 기본 정보: 프로젝트명 & 팀명 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                프로젝트 제목 <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="예: 뉴로보이스 — 인공지능 기반 실시간 음성 합성 디바이스"
+                placeholder="예: 핀테크 AI 이상거래 탐지 솔루션"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                팀명 *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                출품 팀명 <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                placeholder="예: 팀 뉴로보이스"
+                placeholder="예: 넥스트웨이브"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              한 줄 요약 (프로젝트 핵심 설명)
-            </label>
-            <input
-              type="text"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="예: 루게릭병 환자를 위한 초소형 이어셋과 온디바이스 생성 AI 보조공학 솔루션"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
-            />
+          {/* ========================================================
+              ★ 2. 내 팀원 설정하기 섹션 (요구사항 1)
+              ======================================================== */}
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                  <Users size={14} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    내 팀원 설정하기
+                    <span className="text-[10px] font-normal text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">
+                      투자 제한 연동
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    등록된 팀원들은 같은 프로젝트에 투자가 제한됩니다.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMemberSettings(!showMemberSettings)}
+                className="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition cursor-pointer shadow-2xs flex items-center gap-1"
+              >
+                <span>{showMemberSettings ? "설정 닫기" : "+ 팀원 등록/관리"}</span>
+              </button>
+            </div>
+
+            {/* 대표 등록자 기본 표시 */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <span className="font-semibold text-slate-500 text-[11px]">소속 인원:</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 font-medium text-[11px] border border-blue-200">
+                <span className="px-1 py-0.2 rounded bg-blue-600 text-white text-[9px] font-bold">대표</span>
+                <span>{currentUser?.name || "작성자"} ({currentUser?.department || "자유"} · {currentUser?.studentNumber || "등록자"})</span>
+              </span>
+
+              {resolvedMembers.map((m, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium text-[11px] border border-indigo-200">
+                  <span className="px-1 py-0.2 rounded bg-indigo-600 text-white text-[9px] font-bold">팀원</span>
+                  <span>{m.name} {m.department ? `· ${m.department}` : ""} {m.studentNumber ? `(${m.studentNumber})` : ""}</span>
+                </span>
+              ))}
+            </div>
+
+            {/* 팀원 등록 펼침 화면 */}
+            {showMemberSettings && (
+              <div className="mt-3 pt-3 border-t border-indigo-200/60 space-y-3 bg-white p-3.5 rounded-xl border border-indigo-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">팀원 아이디(이메일 또는 학번) 입력</span>
+                  <button
+                    type="button"
+                    onClick={handleAddMemberInput}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Plus size={13} /> 추가하기
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {memberInputs.map((val, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={val}
+                        onChange={(e) => handleMemberInputChange(idx, e.target.value)}
+                        placeholder="팀원의 가입 이메일 또는 회원 아이디 입력"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-indigo-500 focus:outline-none"
+                      />
+                      {memberInputs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMemberInput(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                          title="삭제"
+                        >
+                          <Minus size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveTeamMembers}
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Check size={13} /> 팀원 확인 및 저장하기
+                  </button>
+                  <span className="text-[11px] text-slate-400">회원가입 정보와 자동 대조됩니다</span>
+                </div>
+
+                {memberLookupMessage && (
+                  <p className="text-xs font-medium text-indigo-700 bg-indigo-50 p-2 rounded-lg border border-indigo-100">
+                    {memberLookupMessage}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* 분야 및 목표 크레딧 */}
+          {/* 3. 분야 및 목표 투자 크레딧 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                혁신 분야 카테고리 *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                카테고리 / 산업 분야
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as ProjectCategory)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none bg-white cursor-pointer"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none bg-white"
               >
-                <option value="AI/SaaS">AI/SaaS</option>
-                <option value="Bio/Health">Bio/Health</option>
-                <option value="FinTech">FinTech</option>
-                <option value="GreenTech">GreenTech</option>
-                <option value="Robotics">Robotics</option>
-                <option value="EdTech">EdTech</option>
+                <option value="AI/SaaS">AI / SaaS</option>
+                <option value="Bio/Health">Bio / Healthcare</option>
+                <option value="FinTech">FinTech / 금융</option>
+                <option value="GreenTech">GreenTech / 환경</option>
+                <option value="Robotics">Robotics / 하드웨어</option>
+                <option value="EdTech">EdTech / 교육</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                목표 펀딩 크레딧 (CR) *
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                목표 모금액 (CR)
               </label>
               <input
                 type="number"
-                min={10000}
-                step={5000}
+                step={1000}
                 value={targetCredits}
                 onChange={(e) => setTargetCredits(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none font-mono"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
               />
             </div>
           </div>
 
+          {/* 4. 요약 및 설명 */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              상세 소개 글 (마크다운 / 텍스트)
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              한 줄 요약 (카드 노출) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="예: 초개인화 AI 알고리즘을 통한 금융 거래 실시간 보안 솔루션"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              상세 소개글
             </label>
             <textarea
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="프로젝트의 기획 배경, 핵심 기술력, 펀딩 목적을 자세히 작성해 주세요."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none leading-relaxed"
+              placeholder="프로젝트의 문제 정의, 솔루션, 비즈니스 모델 등을 자유롭게 입력하세요."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
             />
           </div>
 
-          {/* 핵심 성과 피치 하이라이트 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                핵심 성과 1
-              </label>
-              <input
-                type="text"
-                value={highlight1}
-                onChange={(e) => setHighlight1(e.target.value)}
-                placeholder="예: 국내외 특허 2건 출원 완료"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                핵심 성과 2
-              </label>
-              <input
-                type="text"
-                value={highlight2}
-                onChange={(e) => setHighlight2(e.target.value)}
-                placeholder="예: 사전 사용자 테스트 1,000명 확보"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-              />
-            </div>
-          </div>
-
-
-          {/* 2. 대표 썸네일 이미지 업로드 */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-800">
-                대표 썸네일 이미지 *
-              </label>
-              <span className="text-[11px] font-mono text-slate-400">권장: 16:10 또는 4:3 비율</span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="w-full sm:w-40 aspect-[16/10] bg-slate-200 rounded-xl overflow-hidden border border-slate-300 shrink-0 relative">
-                {thumbnailUrl ? (
-                  <img src={thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-xs">
-                    <ImageIcon size={24} />
-                    <span>미리보기</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 w-full space-y-2">
-                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 cursor-pointer shadow-sm transition-all">
-                  <Upload size={14} /> 썸네일 이미지 파일 선택
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleThumbnailFileUpload}
-                    className="hidden"
-                  />
-                </label>
-
-                <div className="text-[11px] text-slate-500 font-mono">또는 외부 이미지 URL 직접 입력:</div>
+          {/* 5. 대표 썸네일 이미지 */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-slate-700">
+              대표 썸네일 이미지 <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-all cursor-pointer shrink-0">
+                <Upload size={15} /> 썸네일 파일 업로드
                 <input
-                  type="text"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailFileUpload}
+                  className="hidden"
+                />
+              </label>
+              <div className="flex-1 w-full">
+                <input
+                  type="url"
                   value={thumbnailUrl}
                   onChange={(e) => setThumbnailUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-mono text-slate-700 focus:outline-none"
+                  placeholder="또는 이미지 URL 직접 입력"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 focus:outline-none"
                 />
               </div>
             </div>
+
+            {thumbnailUrl && (
+              <div className="w-24 h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                <img src={thumbnailUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
+              </div>
+            )}
           </div>
 
-          {/* 3. 상세 랜딩페이지 포맷 선택 (IMAGE / PDF / HTML) */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-800">
-              상세 랜딩페이지 포맷 (G마켓 스타일 결과물 제공 방식) *
-            </label>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setLandingFormat("IMAGE")}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                  landingFormat === "IMAGE"
-                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <ImageIcon size={16} /> 이미지 (IMAGE)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLandingFormat("PDF")}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                  landingFormat === "PDF"
-                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <FileText size={16} /> PDF 문서 (PDF)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setLandingFormat("HTML")}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                  landingFormat === "HTML"
-                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <Globe size={16} /> 웹페이지 (HTML)
-              </button>
+          {/* ========================================================
+              ★ 6. 상세페이지 컨텐츠 미디어 4종 & 우선순위 (요구사항 2)
+              ======================================================== */}
+          <div className="pt-2 border-t border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Film size={16} className="text-blue-600" />
+                  상세페이지 컨텐츠 미디어 (다중 선택 & 우선순위 지정)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  원하는 미디어를 다중 선택하고, 드롭다운으로 1~4순위 노출 순서를 정하세요.
+                </p>
+              </div>
             </div>
 
-            {/* 포맷별 파일/URL 입력 */}
-            {landingFormat === "IMAGE" && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                    <ImageIcon size={14} className="text-blue-600" /> 세로형 상세페이지 이미지 등록 (G마켓 스타일)
-                  </span>
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 cursor-pointer shadow-sm transition-all">
-                    <Plus size={14} /> 이미지 파일 추가
+            {/* 4종 미디어 카드 목록 */}
+            <div className="space-y-3">
+              {/* [미디어 1: 이미지] */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                enabledMedia.IMAGE ? "border-blue-300 bg-blue-50/20" : "border-slate-200 bg-slate-50 opacity-75"
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
                     <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleDetailImagesUpload}
-                      className="hidden"
+                      type="checkbox"
+                      checked={enabledMedia.IMAGE}
+                      onChange={(e) => setEnabledMedia({ ...enabledMedia, IMAGE: e.target.checked })}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                     />
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      <ImageIcon size={15} className="text-blue-600" /> 이미지 상세페이지 (다중 이미지)
+                    </span>
                   </label>
-                </div>
 
-                <p className="text-[11px] text-slate-500">
-                  G마켓 상품 설명처럼 세로로 길게 이어지는 고해상도 상세 이미지들을 순서대로 등록할 수 있습니다.
-                </p>
-
-                {landingImages.length > 0 ? (
-                  <div className="space-y-2">
-                    {landingImages.map((img, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 gap-3"
+                  {enabledMedia.IMAGE && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 text-[11px] font-medium">노출 순서:</span>
+                      <select
+                        value={priorities.IMAGE}
+                        onChange={(e) => setPriorities({ ...priorities, IMAGE: Number(e.target.value) })}
+                        className="px-2 py-1 rounded-lg border border-blue-200 bg-white font-bold text-blue-700 text-xs outline-none"
                       >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
-                          </span>
-                          <img src={img} alt={`detail-${idx}`} className="w-12 h-10 object-cover rounded-lg border border-slate-200 shrink-0" />
-                          <span className="font-mono text-xs text-slate-600 truncate">{img.slice(0, 50)}...</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setLandingImages(landingImages.filter((_, i) => i !== idx))}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer shrink-0"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <option value={1}>1순위 (최상단)</option>
+                        <option value={2}>2순위</option>
+                        <option value={3}>3순위</option>
+                        <option value={4}>4순위</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {enabledMedia.IMAGE && (
+                  <div className="space-y-2.5 pl-6">
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs">
+                        <Upload size={13} /> 이미지 파일 추가
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleDetailImagesUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="url"
+                        value={mediaImageUrl}
+                        onChange={(e) => setMediaImageUrl(e.target.value)}
+                        placeholder="또는 이미지 URL 입력"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-white outline-none"
+                      />
+                    </div>
+
+                    {mediaImages.length > 0 && (
+                      <div className="flex items-center gap-2 overflow-x-auto py-1">
+                        {mediaImages.map((img, idx) => (
+                          <div key={idx} className="relative w-16 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0 group">
+                            <img src={img} alt={`thumb-${idx}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setMediaImages(mediaImages.filter((_, i) => i !== idx))}
+                              className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-6 text-center border border-dashed border-slate-300 rounded-xl bg-white">
-                    <p className="text-xs text-slate-500">등록된 상세 이미지가 없습니다. [이미지 파일 추가]를 눌러 업로드하세요.</p>
+                    )}
                   </div>
                 )}
               </div>
-            )}
 
-            {landingFormat === "PDF" && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <FileText size={14} className="text-blue-600" /> PDF 문서 등록 (웹 뷰어 임베드)
-                </span>
-
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 cursor-pointer shadow-sm transition-all shrink-0">
-                    <Upload size={14} /> PDF 파일 선택
+              {/* [미디어 2: PDF 문서] */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                enabledMedia.PDF ? "border-indigo-300 bg-indigo-50/20" : "border-slate-200 bg-slate-50 opacity-75"
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
                     <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={handlePdfUpload}
-                      className="hidden"
+                      type="checkbox"
+                      checked={enabledMedia.PDF}
+                      onChange={(e) => setEnabledMedia({ ...enabledMedia, PDF: e.target.checked })}
+                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
                     />
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      <FileText size={15} className="text-indigo-600" /> PDF 문서 (전용 1페이지/세로 뷰어)
+                    </span>
                   </label>
 
-                  <div className="flex-1 w-full">
-                    <input
-                      type="text"
-                      value={landingUrl}
-                      onChange={(e) => setLandingUrl(e.target.value)}
-                      placeholder="또는 PDF URL 입력 (예: https://.../document.pdf)"
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-700 focus:outline-none"
-                    />
-                  </div>
+                  {enabledMedia.PDF && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 text-[11px] font-medium">노출 순서:</span>
+                      <select
+                        value={priorities.PDF}
+                        onChange={(e) => setPriorities({ ...priorities, PDF: Number(e.target.value) })}
+                        className="px-2 py-1 rounded-lg border border-indigo-200 bg-white font-bold text-indigo-700 text-xs outline-none"
+                      >
+                        <option value={1}>1순위 (최상단)</option>
+                        <option value={2}>2순위</option>
+                        <option value={3}>3순위</option>
+                        <option value={4}>4순위</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {landingUrl && (
-                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono flex items-center gap-2">
-                    <FileText size={14} className="text-emerald-600 shrink-0" />
-                    <span className="truncate">연결된 PDF: {landingUrl.slice(0, 60)}...</span>
+                {enabledMedia.PDF && (
+                  <div className="space-y-2 pl-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs shrink-0">
+                        <Upload size={13} /> PDF 파일 선택
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={handlePdfUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        value={mediaPdfUrl}
+                        onChange={(e) => setMediaPdfUrl(e.target.value)}
+                        placeholder="또는 PDF URL 입력 (예: https://.../deck.pdf)"
+                        className="flex-1 w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-white outline-none"
+                      />
+                    </div>
+                    {mediaPdfUrl && (
+                      <p className="text-[11px] text-emerald-700 font-mono truncate">
+                        ✓ 연결된 PDF: {mediaPdfUrl.slice(0, 60)}...
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
-            )}
 
-            {landingFormat === "HTML" && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Globe size={14} className="text-blue-600" /> 인터랙티브 웹페이지 URL 등록
-                </span>
+              {/* [미디어 3: HTML 시연 및 HTML 파일 업로드] */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                enabledMedia.HTML ? "border-emerald-300 bg-emerald-50/20" : "border-slate-200 bg-slate-50 opacity-75"
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enabledMedia.HTML}
+                      onChange={(e) => setEnabledMedia({ ...enabledMedia, HTML: e.target.checked })}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      <Globe size={15} className="text-emerald-600" /> HTML (웹페이지 URL 또는 HTML 파일 업로드)
+                    </span>
+                  </label>
 
-                <div className="relative">
-                  <LinkIcon size={16} className="absolute left-3 top-3 text-slate-400" />
-                  <input
-                    type="url"
-                    value={landingUrl}
-                    onChange={(e) => setLandingUrl(e.target.value)}
-                    placeholder="https://my-project-demo.vercel.app 또는 노션 포트폴리오 URL"
-                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
-                  />
+                  {enabledMedia.HTML && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 text-[11px] font-medium">노출 순서:</span>
+                      <select
+                        value={priorities.HTML}
+                        onChange={(e) => setPriorities({ ...priorities, HTML: Number(e.target.value) })}
+                        className="px-2 py-1 rounded-lg border border-emerald-200 bg-white font-bold text-emerald-700 text-xs outline-none"
+                      >
+                        <option value={1}>1순위 (최상단)</option>
+                        <option value={2}>2순위</option>
+                        <option value={3}>3순위</option>
+                        <option value={4}>4순위</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  사용자가 프로젝트를 열었을 때 안전한 iframe 환경에서 실제 웹페이지가 렌더링됩니다.
-                </p>
+
+                {enabledMedia.HTML && (
+                  <div className="space-y-2 pl-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs shrink-0">
+                        <Upload size={13} /> HTML 파일 업로드
+                        <input
+                          type="file"
+                          accept=".html,.htm"
+                          onChange={handleHtmlFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="url"
+                        value={mediaHtmlUrl}
+                        onChange={(e) => setMediaHtmlUrl(e.target.value)}
+                        placeholder="또는 시연 웹사이트 URL (https://...)"
+                        className="flex-1 w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-white outline-none"
+                      />
+                    </div>
+                    {(mediaHtmlFileName || mediaHtmlUrl) && (
+                      <p className="text-[11px] text-emerald-700 font-mono truncate">
+                        ✓ {mediaHtmlFileName ? `업로드 파일: ${mediaHtmlFileName}` : `웹 URL: ${mediaHtmlUrl}`}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* [미디어 4: 동영상 파일 업로드 & 동영상 URL] */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                enabledMedia.VIDEO ? "border-rose-300 bg-rose-50/20" : "border-slate-200 bg-slate-50 opacity-75"
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enabledMedia.VIDEO}
+                      onChange={(e) => setEnabledMedia({ ...enabledMedia, VIDEO: e.target.checked })}
+                      className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                    />
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      <Video size={15} className="text-rose-600" /> 동영상 (파일 직접 업로드 or 영상 URL)
+                    </span>
+                  </label>
+
+                  {enabledMedia.VIDEO && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 text-[11px] font-medium">노출 순서:</span>
+                      <select
+                        value={priorities.VIDEO}
+                        onChange={(e) => setPriorities({ ...priorities, VIDEO: Number(e.target.value) })}
+                        className="px-2 py-1 rounded-lg border border-rose-200 bg-white font-bold text-rose-700 text-xs outline-none"
+                      >
+                        <option value={1}>1순위 (최상단)</option>
+                        <option value={2}>2순위</option>
+                        <option value={3}>3순위</option>
+                        <option value={4}>4순위</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {enabledMedia.VIDEO && (
+                  <div className="space-y-2 pl-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-rose-700 hover:bg-rose-50 cursor-pointer shadow-2xs shrink-0">
+                        <Upload size={13} /> 동영상 파일 업로드 (MP4/WebM)
+                        <input
+                          type="file"
+                          accept="video/mp4,video/webm,video/*"
+                          onChange={handleVideoFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        value={mediaVideoUrl}
+                        onChange={(e) => {
+                          setMediaVideoUrl(e.target.value);
+                          setMediaVideoType("URL");
+                        }}
+                        placeholder="또는 유튜브 / 비디오 스트리밍 URL 입력"
+                        className="flex-1 w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-mono bg-white outline-none"
+                      />
+                    </div>
+
+                    {mediaVideoUrl && (
+                      <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-mono">
+                        <Play size={14} className="text-rose-600 shrink-0" />
+                        <span className="truncate">
+                          {mediaVideoFileName ? `업로드 영상: ${mediaVideoFileName}` : `영상 링크: ${mediaVideoUrl}`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* 저장 및 닫기 버튼 */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-            <Button type="button" variant="outline" onClick={onClose}>
-              취소
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
-              {isEditing ? "수정사항 저장하기" : "프로젝트 출품 완료"}
-            </Button>
+          {/* 7. 모달 하단 버튼 */}
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            {isEditing && editProject ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm("정말 이 프로젝트를 삭제하시겠습니까?")) {
+                    await deleteProject(editProject.id);
+                    onClose();
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={14} /> 프로젝트 삭제
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold transition cursor-pointer"
+              >
+                취소
+              </button>
+              <Button type="submit" variant="primary" disabled={isSubmitting}>
+                {isSubmitting ? "저장 처리 중..." : (isEditing ? "수정사항 저장" : "프로젝트 최종 출품")}
+              </Button>
+            </div>
           </div>
         </form>
       </div>

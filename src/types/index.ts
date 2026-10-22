@@ -50,8 +50,29 @@ export interface User {
   password?: string; // 로그인 비밀번호 (기본: 123456 or 8자리 난수)
 }
 
-export type LandingFormat = "IMAGE" | "PDF" | "HTML" | "WEB";
+export type LandingFormat = "IMAGE" | "PDF" | "HTML" | "WEB" | "VIDEO";
+export type MediaType = "IMAGE" | "PDF" | "HTML" | "VIDEO";
 export type ProjectCategory = "AI/SaaS" | "Bio/Health" | "FinTech" | "GreenTech" | "Robotics" | "EdTech";
+
+export interface ProjectMediaItem {
+  id: string;
+  type: MediaType;
+  priority: number; // 1, 2, 3, 4 ... 우선순위
+  title?: string;
+  url: string; // 이미지/PDF/HTML/동영상 URL 또는 Storage URL
+  images?: string[]; // 다중 이미지
+  htmlContent?: string; // HTML 파일 업로드 텍스트 내용
+  videoType?: "FILE" | "URL"; // 동영상 구분
+  fileName?: string;
+}
+
+export interface TeamMemberDetail {
+  id: string;
+  email: string;
+  name: string;
+  department?: string;
+  studentNumber?: string;
+}
 
 export interface Comment {
   id: string;
@@ -94,6 +115,9 @@ export interface Project {
   targetCredits?: number;
   pitchHighlights?: string[];
   teamMembers?: { name: string; role: string }[];
+  teamMemberIds?: string[]; // 소속 팀원 ID 목록 (투자 제한용)
+  teamMemberDetails?: TeamMemberDetail[]; // 팀원 상세 정보 (이름, 학과, 학번)
+  mediaItems?: ProjectMediaItem[]; // 4종 미디어 및 우선순위 배열
   comments?: Comment[];
   detailImages?: string[];
   pdfSlides?: PdfSlide[];

@@ -70,10 +70,10 @@ export const AuthScreen: React.FC = () => {
           <Sparkles size={22} />
         </div>
         <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-          CROWDFUND
+          레디스타트업
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-          {event.name}
+          클라우드펀딩 플랫폼 · {event.name}
         </p>
 
         <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[11px] font-mono font-medium text-slate-600">

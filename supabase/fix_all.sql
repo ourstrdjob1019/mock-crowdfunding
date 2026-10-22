@@ -88,9 +88,22 @@ CREATE TABLE public.projects (
   last_modified_at TEXT,
   is_hidden BOOLEAN NOT NULL DEFAULT false,
   total_credits INTEGER NOT NULL DEFAULT 0,
-  investor_count INTEGER NOT NULL DEFAULT 0,
+  team_member_ids JSONB DEFAULT '[]'::jsonb,
+  team_member_details JSONB DEFAULT '[]'::jsonb,
+  media_items JSONB DEFAULT '[]'::jsonb,
+  category TEXT DEFAULT 'AI/SaaS',
+  target_credits INTEGER DEFAULT 20000,
+  pitch_highlights JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- 기존 projects 테이블 컬럼 안전 추가 (기존 DB 존재 시)
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS team_member_ids JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS team_member_details JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS media_items JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'AI/SaaS';
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS target_credits INTEGER DEFAULT 20000;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS pitch_highlights JSONB DEFAULT '[]'::jsonb;
 
 CREATE TABLE public.investments (
   id TEXT PRIMARY KEY,

@@ -66,10 +66,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <div className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-800 bg-clip-text text-transparent">
-                CROWDFUND
+                레디스타트업
               </div>
               <div className="text-[11px] font-medium text-slate-500 tracking-wide">
-                2026 University DemoDay
+                클라우드펀딩 플랫폼
               </div>
             </div>
           </div>
