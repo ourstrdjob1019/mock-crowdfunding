@@ -12,7 +12,9 @@ import {
   Sparkles,
   GraduationCap,
   Award,
-  Users
+  Users,
+  School,
+  Hash
 } from "lucide-react";
 import { UserRole } from "@/types";
 
@@ -30,6 +32,8 @@ export const AuthScreen: React.FC = () => {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regName, setRegName] = useState("");
+  const [regDepartment, setRegDepartment] = useState("");
+  const [regStudentNumber, setRegStudentNumber] = useState("");
   const [regRole, setRegRole] = useState<UserRole>("STUDENT");
   const [regPrivacyAgreed, setRegPrivacyAgreed] = useState(true);
 
@@ -46,10 +50,26 @@ export const AuthScreen: React.FC = () => {
     e.preventDefault();
     setErrorMessage("");
 
+    if (!regEmail.trim()) {
+      setErrorMessage("이메일 주소를 입력해 주세요.");
+      return;
+    }
+    if (!regPassword.trim()) {
+      setErrorMessage("비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (!regName.trim()) {
+      setErrorMessage("이름(실명)을 입력해 주세요.");
+      return;
+    }
+
     const res = await register({
-      email: regEmail,
-      password: regPassword,
-      name: regName,
+      email: regEmail.trim(),
+      password: regPassword.trim(),
+      name: regName.trim(),
+      department: regDepartment.trim() || (regRole === "STUDENT" ? "창업학부" : "운영위원회"),
+      studentNumber: regStudentNumber.trim(),
+      institution: "서원대학교",
       role: regRole,
       privacyAgreed: regPrivacyAgreed,
     });
@@ -265,6 +285,41 @@ export const AuthScreen: React.FC = () => {
                     placeholder="홍길동"
                     className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
                   />
+                </div>
+              </div>
+
+              {/* 학과 및 학번 (조원 매칭 및 본인 확인용) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    학과 / 전공 {regRole === "STUDENT" && <span className="text-blue-600">*</span>}
+                  </label>
+                  <div className="relative">
+                    <School size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={regDepartment}
+                      onChange={(e) => setRegDepartment(e.target.value)}
+                      placeholder="예: 컴퓨터공학과"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    학번 {regRole === "STUDENT" && <span className="text-blue-600">*</span>}
+                  </label>
+                  <div className="relative">
+                    <Hash size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={regStudentNumber}
+                      onChange={(e) => setRegStudentNumber(e.target.value)}
+                      placeholder="예: 20261234"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

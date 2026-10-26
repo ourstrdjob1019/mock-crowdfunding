@@ -568,8 +568,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       (Boolean(currentUser.email) && targetProject.authorEmail?.toLowerCase() === currentUser.email.toLowerCase());
     const isMyTeam = Boolean(currentUser.teamId && currentUser.teamId === targetProject.teamId);
 
-    if (isAuthor || isMyTeam) {
-      return { success: false, message: "본인이 출품 등록한 프로젝트에는 투자할 수 없습니다." };
+    // 팀원 목록에 포함되어 있는지 확인 (아이디, 이메일, 학번 대조)
+    const isTeamMember = Boolean(
+      (targetProject.teamMemberIds && (
+        targetProject.teamMemberIds.includes(currentUser.id) ||
+        (currentUser.email && targetProject.teamMemberIds.map(s => s.toLowerCase()).includes(currentUser.email.toLowerCase())) ||
+        (currentUser.studentNumber && targetProject.teamMemberIds.includes(currentUser.studentNumber))
+      )) ||
+      (targetProject.teamMemberDetails && targetProject.teamMemberDetails.some(m => 
+        m.id === currentUser.id ||
+        (currentUser.email && m.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
+        (currentUser.studentNumber && m.studentNumber === currentUser.studentNumber)
+      ))
+    );
+
+    if (isAuthor || isMyTeam || isTeamMember) {
+      return { success: false, message: "본인 또는 소속 팀원이 출품 등록한 프로젝트에는 투자할 수 없습니다." };
     }
 
     if (amount < event.minInvestment || amount > event.maxInvestment) {

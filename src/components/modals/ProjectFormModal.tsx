@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Project, LandingFormat, ProjectCategory, MediaType, ProjectMediaItem, TeamMemberDetail } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
-import { uploadThumbnail, uploadLandingFile } from "@/lib/supabase";
+import { supabase, uploadThumbnail, uploadLandingFile } from "@/lib/supabase";
 import { 
   X, 
   Upload, 
@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   Film,
   Play,
-  ArrowUpDown
+  ArrowUpDown,
+  Loader2
 } from "lucide-react";
 
 interface ProjectFormModalProps {
@@ -101,6 +102,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const [mediaVideoFileName, setMediaVideoFileName] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploadStatus, setUploadStatus] = useState<string>("");
 
@@ -245,30 +247,30 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadStatus("썸네일 이미지 처리 중...");
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setThumbnailUrl(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setUploadStatus("썸네일 이미지 Storage 서버 업로드 중...");
+    setIsUploading(true);
+    setErrorMessage("");
 
     try {
       const res = await uploadThumbnail(file);
       if (res.url) {
         setThumbnailUrl(res.url);
+        setUploadStatus("✅ 썸네일 등록 완료!");
+        setTimeout(() => setUploadStatus(""), 2000);
+      } else {
+        setErrorMessage(res.error || "썸네일 업로드에 실패했습니다.");
       }
     } catch (err: any) {
       console.warn("Thumbnail upload warning:", err);
+      setErrorMessage(`썸네일 업로드 오류: ${err.message || err}`);
     } finally {
-      setUploadStatus("");
+      setIsUploading(false);
     }
   };
 
-  // 2. 팀원 조회 및 확인
-  const handleSaveTeamMembers = () => {
-    setMemberLookupMessage("");
+  // 2. 팀원 조회 및 확인 (로컬 + DB 실시간 검색 및 본인 등록 방지)
+  const handleSaveTeamMembers = async () => {
+    setMemberLookupMessage("팀원 계정 확인 중...");
     const trimmedInputs = memberInputs.map(s => s.trim()).filter(Boolean);
 
     if (trimmedInputs.length === 0) {
@@ -279,9 +281,22 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
 
     const matched: TeamMemberDetail[] = [];
     const notFound: string[] = [];
+    let selfDetected = false;
 
-    trimmedInputs.forEach(inputVal => {
-      // 1) users에서 email, id, studentNumber 대조
+    for (const inputVal of trimmedInputs) {
+      // 본인(대표자) 입력 감지
+      const isCurrentUser = currentUser && (
+        inputVal.toLowerCase() === currentUser.email?.toLowerCase() ||
+        inputVal.toLowerCase() === currentUser.id.toLowerCase() ||
+        (currentUser.studentNumber && inputVal === currentUser.studentNumber)
+      );
+
+      if (isCurrentUser) {
+        selfDetected = true;
+        continue;
+      }
+
+      // 1) users 메모리에서 email, id, studentNumber 대조
       const foundUser = users.find(u => 
         u.email.toLowerCase() === inputVal.toLowerCase() ||
         u.id.toLowerCase() === inputVal.toLowerCase() ||
@@ -293,10 +308,10 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           id: foundUser.id,
           email: foundUser.email,
           name: foundUser.name,
-          department: foundUser.department,
-          studentNumber: foundUser.studentNumber,
+          department: foundUser.department || "창업학부",
+          studentNumber: foundUser.studentNumber || "",
         });
-        return;
+        continue;
       }
 
       // 2) roster에서 대조
@@ -310,14 +325,38 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
           id: foundRoster.email,
           email: foundRoster.email,
           name: foundRoster.name,
-          department: foundRoster.department,
-          studentNumber: foundRoster.studentNumber,
+          department: foundRoster.department || "창업학부",
+          studentNumber: foundRoster.studentNumber || "",
         });
-        return;
+        continue;
+      }
+
+      // 3) Supabase DB 실시간 조회 (방금 가입한 학생 지원)
+      if (supabase) {
+        try {
+          const { data: dbUser } = await supabase
+            .from("users")
+            .select("*")
+            .or(`email.ilike.${inputVal},student_number.eq.${inputVal},id.eq.${inputVal}`)
+            .maybeSingle();
+
+          if (dbUser) {
+            matched.push({
+              id: dbUser.id,
+              email: dbUser.email,
+              name: dbUser.name,
+              department: dbUser.department || "창업학부",
+              studentNumber: dbUser.student_number || "",
+            });
+            continue;
+          }
+        } catch (dbErr) {
+          console.warn("DB user lookup error:", dbErr);
+        }
       }
 
       notFound.push(inputVal);
-    });
+    }
 
     // 중복 제거
     const uniqueMatched = matched.filter((v, idx, arr) => 
@@ -326,11 +365,17 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
 
     setResolvedMembers(uniqueMatched);
 
-    if (notFound.length > 0) {
-      setMemberLookupMessage(`⚠️ 존재하지 않는 아이디/이메일: [${notFound.join(", ")}]. 가입된 계정인지 확인해주세요.`);
-    } else {
-      setMemberLookupMessage(`✅ ${uniqueMatched.length}명의 팀원이 정상 등록되었습니다.`);
+    let msg = "";
+    if (uniqueMatched.length > 0) {
+      msg += `✅ ${uniqueMatched.length}명의 팀원이 정상 확인되어 등록되었습니다. `;
     }
+    if (selfDetected) {
+      msg += `ℹ️ 대표자 본인은 이미 기본 등록되어 있어 팀원 목록에서 자동 제외되었습니다. `;
+    }
+    if (notFound.length > 0) {
+      msg += `⚠️ 미가입 아이디/이메일: [${notFound.join(", ")}]. 먼저 회원가입 후 등록해 주세요.`;
+    }
+    setMemberLookupMessage(msg.trim());
   };
 
   const handleAddMemberInput = () => {
@@ -350,59 +395,62 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   };
 
   // 3. 미디어 파일 업로드 핸들러들
-  // A. 이미지 다중 업로드
+  // A. 이미지 다중 업로드 (Storage 안전 업로드)
   const handleDetailImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setUploadStatus("상세 이미지 처리 중...");
-    const newUrls: string[] = [];
+    setUploadStatus("상세 이미지 Storage 서버 업로드 중...");
+    setIsUploading(true);
+    setErrorMessage("");
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      const readPromise = new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
+    try {
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const res = await uploadLandingFile(file);
+        return res.url;
       });
-      reader.readAsDataURL(file);
-      const dataUrl = await readPromise;
-      newUrls.push(dataUrl);
 
-      // Storage 업로드 백그라운드
-      uploadLandingFile(file).then(res => {
-        if (res.url) {
-          setMediaImages(prev => prev.map(u => u === dataUrl ? res.url! : u));
-        }
-      });
+      const uploadedUrls = await Promise.all(uploadPromises);
+      const validUrls = uploadedUrls.filter((url): url is string => Boolean(url));
+
+      if (validUrls.length > 0) {
+        setMediaImages(prev => [...prev, ...validUrls]);
+        setUploadStatus(`✅ 이미지 ${validUrls.length}장 업로드 완료!`);
+        setTimeout(() => setUploadStatus(""), 2000);
+      } else {
+        setErrorMessage("이미지 업로드에 실패했습니다. 파일 용량(150MB 이하)을 확인해 주세요.");
+      }
+    } catch (err: any) {
+      console.warn("Detail images upload warning:", err);
+      setErrorMessage(`이미지 업로드 오류: ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
     }
-
-    setMediaImages(prev => [...prev, ...newUrls]);
-    setUploadStatus("");
   };
 
-  // B. PDF 업로드
+  // B. PDF 업로드 (Storage 안전 업로드)
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadStatus("PDF 문서 처리 중...");
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setMediaPdfUrl(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setUploadStatus("PDF 문서 Storage 서버 업로드 중...");
+    setIsUploading(true);
+    setErrorMessage("");
 
     try {
       const res = await uploadLandingFile(file);
       if (res.url) {
         setMediaPdfUrl(res.url);
+        setUploadStatus("✅ PDF 문서 업로드 완료!");
+        setTimeout(() => setUploadStatus(""), 2000);
+      } else {
+        setErrorMessage(res.error || "PDF 업로드에 실패했습니다.");
       }
     } catch (err: any) {
       console.warn("PDF upload warning:", err);
+      setErrorMessage(`PDF 업로드 오류: ${err.message || err}`);
     } finally {
-      setUploadStatus("");
+      setIsUploading(false);
     }
   };
 
@@ -412,8 +460,11 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     if (!file) return;
 
     setMediaHtmlFileName(file.name);
-    setUploadStatus("HTML 파일 읽는 중...");
+    setUploadStatus("HTML 파일 읽기 및 Storage 서버 업로드 중...");
+    setIsUploading(true);
+    setErrorMessage("");
 
+    // HTML 내용 텍스트 읽기
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -426,36 +477,50 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       const res = await uploadLandingFile(file);
       if (res.url) {
         setMediaHtmlUrl(res.url);
+        setUploadStatus("✅ HTML 파일 업로드 완료!");
+        setTimeout(() => setUploadStatus(""), 2000);
+      } else {
+        setErrorMessage(res.error || "HTML 파일 업로드에 실패했습니다.");
       }
     } catch (err: any) {
       console.warn("HTML upload warning:", err);
+      setErrorMessage(`HTML 업로드 오류: ${err.message || err}`);
     } finally {
-      setUploadStatus("");
+      setIsUploading(false);
     }
   };
 
-  // D. 동영상 파일 업로드
+  // D. 동영상 파일 업로드 (대용량 안전 업로드)
   const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setMediaVideoFileName(file.name);
-    setUploadStatus("동영상 파일 처리 및 Storage 업로드 중...");
+    setUploadStatus("동영상 Storage 서버 업로드 중입니다. 잠시만 기다려주세요...");
+    setIsUploading(true);
+    setErrorMessage("");
 
-    // 즉시 미리보기를 위한 Blob URL
-    const blobUrl = URL.createObjectURL(file);
-    setMediaVideoUrl(blobUrl);
+    // 업로드 중 즉시 로컬 미리보기를 위해 임시 URL 설정
+    const tempBlobUrl = URL.createObjectURL(file);
+    setMediaVideoUrl(tempBlobUrl);
     setMediaVideoType("FILE");
 
     try {
       const res = await uploadLandingFile(file);
       if (res.url) {
-        setMediaVideoUrl(res.url);
+        setMediaVideoUrl(res.url); // 영구 Public URL로 즉시 교체
+        setUploadStatus("✅ 동영상 업로드 완료!");
+        setTimeout(() => setUploadStatus(""), 2500);
+      } else {
+        setErrorMessage(res.error || "동영상 업로드에 실패했습니다. (150MB 이하 파일 권장)");
+        setMediaVideoUrl("");
       }
     } catch (err: any) {
       console.warn("Video upload warning:", err);
+      setErrorMessage(`동영상 업로드 오류: ${err.message || err}`);
+      setMediaVideoUrl("");
     } finally {
-      setUploadStatus("");
+      setIsUploading(false);
     }
   };
 
@@ -463,6 +528,23 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+
+    // 업로드 진행 중 가드
+    if (isUploading) {
+      setErrorMessage("파일이 서버에 업로드 중입니다. 업로드가 완료된 후 출품을 완료해 주세요.");
+      return;
+    }
+
+    // 임시 blob URL 잔존 방어 가드
+    if (
+      mediaVideoUrl.startsWith("blob:") || 
+      mediaPdfUrl.startsWith("blob:") || 
+      thumbnailUrl.startsWith("blob:") ||
+      mediaImages.some(img => img.startsWith("blob:"))
+    ) {
+      setErrorMessage("파일 서버 전송이 아직 처리 중입니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
 
     if (!title.trim()) {
       setErrorMessage("프로젝트 제목을 입력해 주세요.");
@@ -1206,6 +1288,12 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
             ) : <div />}
 
             <div className="flex items-center gap-2.5">
+              {uploadStatus && (
+                <div className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1.5 animate-pulse">
+                  {isUploading && <Loader2 size={12} className="animate-spin" />}
+                  {uploadStatus}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -1213,8 +1301,8 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
               >
                 취소
               </button>
-              <Button type="submit" variant="primary" disabled={isSubmitting}>
-                {isSubmitting ? "저장 처리 중..." : (isEditing ? "수정사항 저장" : "프로젝트 최종 출품")}
+              <Button type="submit" variant="primary" disabled={isSubmitting || isUploading}>
+                {isSubmitting ? "저장 처리 중..." : isUploading ? "파일 서버 전송 중..." : (isEditing ? "수정사항 저장" : "프로젝트 최종 출품")}
               </Button>
             </div>
           </div>

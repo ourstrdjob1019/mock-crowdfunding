@@ -21,11 +21,16 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
   const isMyTeamProject = Boolean(
     currentUser && (
       project.authorId === currentUser.id ||
-      currentUser.email === project.authorEmail ||
+      (currentUser.email && project.authorEmail?.toLowerCase() === currentUser.email.toLowerCase()) ||
       (project.teamMemberIds && (
         project.teamMemberIds.includes(currentUser.id) ||
-        project.teamMemberIds.includes(currentUser.email) ||
+        (currentUser.email && project.teamMemberIds.map(s => s.toLowerCase()).includes(currentUser.email.toLowerCase())) ||
         (currentUser.studentNumber && project.teamMemberIds.includes(currentUser.studentNumber))
+      )) ||
+      (project.teamMemberDetails && project.teamMemberDetails.some(m => 
+        m.id === currentUser.id ||
+        (currentUser.email && m.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
+        (currentUser.studentNumber && m.studentNumber === currentUser.studentNumber)
       )) ||
       (project.teamId && currentUser.teamId && project.teamId === currentUser.teamId)
     )
