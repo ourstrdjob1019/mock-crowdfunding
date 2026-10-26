@@ -15,9 +15,9 @@ DROP TABLE IF EXISTS public.events CASCADE;
 -- 2. 유연한 TEXT 타입 기반 테이블 생성 (문자열 ID, UUID 모두 오류 없이 수용)
 CREATE TABLE public.events (
   id TEXT PRIMARY KEY DEFAULT 'evt-2026-fall-01',
-  name TEXT NOT NULL DEFAULT '2026 대한민국 대학생 창업·창작 프로젝트 데모데이',
-  institution TEXT NOT NULL DEFAULT '서울혁신대학교',
-  session TEXT NOT NULL DEFAULT '제3회 정기 데모데이',
+  name TEXT NOT NULL DEFAULT '2026 서원대학교 SPARK 창업챌린지(모의 크라우드펀딩 대회)',
+  institution TEXT NOT NULL DEFAULT '서원대학교',
+  session TEXT NOT NULL DEFAULT '2026 SPARK 창업챌린지',
   event_date DATE NOT NULL DEFAULT CURRENT_DATE,
   base_credit INTEGER NOT NULL DEFAULT 10000,
   min_investment INTEGER NOT NULL DEFAULT 2000,
@@ -58,7 +58,7 @@ CREATE TABLE public.users (
   email TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL DEFAULT 'password123',
   name TEXT NOT NULL,
-  institution TEXT DEFAULT '서울혁신대학교',
+  institution TEXT DEFAULT '서원대학교',
   department TEXT DEFAULT '자유 참가',
   student_number TEXT DEFAULT '',
   team_id TEXT,
@@ -88,6 +88,7 @@ CREATE TABLE public.projects (
   last_modified_at TEXT,
   is_hidden BOOLEAN NOT NULL DEFAULT false,
   total_credits INTEGER NOT NULL DEFAULT 0,
+  investor_count INTEGER NOT NULL DEFAULT 0,
   team_member_ids JSONB DEFAULT '[]'::jsonb,
   team_member_details JSONB DEFAULT '[]'::jsonb,
   media_items JSONB DEFAULT '[]'::jsonb,
@@ -98,6 +99,7 @@ CREATE TABLE public.projects (
 );
 
 -- 기존 projects 테이블 컬럼 안전 추가 (기존 DB 존재 시)
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS investor_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS team_member_ids JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS team_member_details JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS media_items JSONB DEFAULT '[]'::jsonb;
@@ -148,8 +150,8 @@ VALUES ('project-thumbnails', 'project-thumbnails', true, 10485760)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('landing-files', 'landing-files', true, 26214400)
-ON CONFLICT (id) DO UPDATE SET public = true;
+VALUES ('landing-files', 'landing-files', true, 209715200)
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 209715200;
 
 DROP POLICY IF EXISTS "Public Storage Read" ON storage.objects;
 CREATE POLICY "Public Storage Read" ON storage.objects
@@ -171,16 +173,20 @@ CREATE POLICY "Public Storage Delete" ON storage.objects
 INSERT INTO public.events (id, name, institution, session, event_date, base_credit, min_investment, max_investment, current_stage, is_ranking_public)
 VALUES (
   'evt-2026-fall-01',
-  '2026 대한민국 대학생 창업·창작 프로젝트 데모데이',
-  '서울혁신대학교',
-  '제3회 정기 데모데이',
+  '2026 서원대학교 SPARK 창업챌린지(모의 크라우드펀딩 대회)',
+  '서원대학교',
+  '2026 SPARK 창업챌린지',
   CURRENT_DATE,
   10000,
   2000,
   5000,
   'FUNDING_OPEN',
   false
-);
+)
+ON CONFLICT (id) DO UPDATE SET 
+  name = EXCLUDED.name,
+  institution = EXCLUDED.institution,
+  session = EXCLUDED.session;
 
 -- 5. 기본 필수 데이터 시딩 (기본 행사 정보 & 최초 관리자 계정)
 -- 사용자 요청: 미리 세팅된 더미 출품작과 테스트 계정은 제거하여 깨끗한 상태에서 직접 등록/테스트 가능하게 구성
@@ -192,8 +198,8 @@ VALUES
   'admin@gmail.com',
   'password123',
   '총괄 관리자',
-  '창업교육센터',
-  '운영총괄',
+  '서원대학교',
+  '창업지원단',
   'ADMIN-00',
   NULL,
   NULL,

@@ -79,7 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v10_multimedia_team_money_feature";
+  const STORAGE_VERSION = "v11_seowon_spark_challenge";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {
