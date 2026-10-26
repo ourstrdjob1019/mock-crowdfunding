@@ -79,7 +79,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v11_seowon_spark_challenge";
+  const STORAGE_VERSION = "v13_clean_production_empty_projects";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {
@@ -104,9 +104,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (savedVersion !== STORAGE_VERSION) {
       // 과거 캐시 완전 청소 후 기본 데이터 세팅
       localStorage.setItem("mc_data_version", STORAGE_VERSION);
-      setProjects(INITIAL_PROJECTS);
+      localStorage.removeItem("mc_projects");
+      localStorage.removeItem("mc_investments");
+      setProjects([]);
       setUsers(INITIAL_USERS);
-      setInvestments(INITIAL_INVESTMENTS);
+      setInvestments([]);
 
       if (!isLoggedOut && savedCurrentUserId) {
         const found = INITIAL_USERS.find((u) => u.id === savedCurrentUserId);
@@ -121,19 +123,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserState(null);
         setIsLoggedIn(false);
       }
-      saveToStorage(INITIAL_EVENT, INITIAL_PROJECTS, INITIAL_INVESTMENTS, INITIAL_USERS);
+      saveToStorage(INITIAL_EVENT, [], [], INITIAL_USERS);
     } else {
       const savedProjects = localStorage.getItem("mc_projects");
       const savedInvestments = localStorage.getItem("mc_investments");
       const savedUsers = localStorage.getItem("mc_users");
       const savedEvent = localStorage.getItem("mc_event");
 
-      const loadedProjects = savedProjects ? JSON.parse(savedProjects) : INITIAL_PROJECTS;
-      const loadedInvestments = savedInvestments ? JSON.parse(savedInvestments) : INITIAL_INVESTMENTS;
+      const loadedProjects = savedProjects ? JSON.parse(savedProjects) : [];
+      const loadedInvestments = savedInvestments ? JSON.parse(savedInvestments) : [];
       const loadedUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
 
-      setProjects(loadedProjects.length > 0 ? loadedProjects : INITIAL_PROJECTS);
-      setInvestments(loadedInvestments.length > 0 ? loadedInvestments : INITIAL_INVESTMENTS);
+      setProjects(Array.isArray(loadedProjects) ? loadedProjects : []);
+      setInvestments(Array.isArray(loadedInvestments) ? loadedInvestments : []);
       setUsers(loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS);
 
       if (!isLoggedOut && savedCurrentUserId) {
@@ -156,9 +158,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const supaData = await fetchAllFromSupabase();
       if (!supaData.error) {
-        const finalProjects = supaData.projects && supaData.projects.length > 0 ? supaData.projects : INITIAL_PROJECTS;
+        // Supabase DB에 있는 그대로 세팅 (0개면 0개 유지!)
+        const finalProjects = Array.isArray(supaData.projects) ? supaData.projects : [];
+        const finalInvestments = Array.isArray(supaData.investments) ? supaData.investments : [];
         const finalUsers = supaData.users && supaData.users.length > 0 ? supaData.users : INITIAL_USERS;
-        const finalInvestments = supaData.investments && supaData.investments.length > 0 ? supaData.investments : INITIAL_INVESTMENTS;
 
         setProjects(finalProjects);
         setUsers(finalUsers);
@@ -758,11 +761,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("mc_users");
     localStorage.removeItem("mc_current_user_id");
     setEventState(INITIAL_EVENT);
-    setProjects(INITIAL_PROJECTS);
-    setInvestments(INITIAL_INVESTMENTS);
+    setProjects([]);
+    setInvestments([]);
     setUsers(INITIAL_USERS);
-    setCurrentUserState(INITIAL_USERS[0]);
-    setIsLoggedIn(true);
+    setCurrentUserState(null);
+    setIsLoggedIn(false);
   };
 
   return (
