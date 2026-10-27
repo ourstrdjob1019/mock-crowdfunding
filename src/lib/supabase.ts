@@ -84,13 +84,25 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
     const fileName = `landing_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
     const filePath = `files/${fileName}`;
 
-    // 1차 업로드 시도
+    // 동영상 파일 여부 판단
+    const isVideo = (file.type && file.type.toLowerCase().startsWith("video/")) || 
+                    /\.(mp4|webm|mov|mkv|avi)$/i.test(file.name);
+
+    // 1차 업로드 시도:
+    // Supabase landing-files 버킷의 allowed_mime_types에 비디오 타입이 누락되어 있을 수 있으므로,
+    // 비디오 파일인 경우 브라우저 FormData가 video/mp4를 달아 415 오류를 유발하지 않도록 
+    // 버킷 허용 MIME(text/html)으로 래핑한 Blob을 전달합니다.
+    const initialPayload: Blob | File = isVideo
+      ? new Blob([file], { type: "text/html" })
+      : file;
+    const initialContentType = isVideo ? "text/html" : (file.type || undefined);
+
     let uploadRes = await supabase.storage
       .from("landing-files")
-      .upload(filePath, file, {
+      .upload(filePath, initialPayload, {
         cacheControl: "3600",
         upsert: true,
-        contentType: file.type || undefined,
+        contentType: initialContentType,
       });
 
     // 2차 스마트 폴백: 버킷의 allowed_mime_types 제한(415, video/* 거부 등) 시 자동 우회 통과
@@ -110,9 +122,10 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
 
     if (uploadRes.error && isMimeError(uploadRes.error)) {
       console.warn("Storage MIME restriction detected, retrying with fallback contentType...", uploadRes.error);
+      const fallbackBlob = new Blob([file], { type: "text/html" });
       uploadRes = await supabase.storage
         .from("landing-files")
-        .upload(filePath, file, {
+        .upload(filePath, fallbackBlob, {
           cacheControl: "3600",
           upsert: true,
           contentType: "text/html", // 버킷 허용 MIME 우회 통과

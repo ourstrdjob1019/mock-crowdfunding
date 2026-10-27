@@ -607,6 +607,9 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       setUploadStatus(""); // 에러 시 업로드 상태 해제
     } finally {
       setIsUploading(false);
+      try {
+        e.target.value = "";
+      } catch (_) {}
     }
   };
 
@@ -1405,6 +1408,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                         <input
                           type="file"
                           accept="video/mp4,video/webm,video/*"
+                          onClick={(e) => { (e.target as HTMLInputElement).value = ""; }}
                           onChange={handleVideoFileUpload}
                           className="hidden"
                         />
@@ -1423,9 +1427,15 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
 
                     {/* 동영상 업로드 파일명 및 상태 표시 */}
                     {(mediaVideoFileName || mediaVideoUrl) && (
-                      <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-900 font-mono">
+                      <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono transition-colors ${
+                        mediaVideoUrl
+                          ? "bg-emerald-50/80 border-emerald-200 text-emerald-950"
+                          : isUploading
+                          ? "bg-blue-50 border-blue-200 text-blue-900"
+                          : "bg-rose-50 border-rose-200 text-rose-900"
+                      }`}>
                         <div className="flex items-center gap-2 truncate">
-                          <Play size={14} className="text-rose-600 shrink-0" />
+                          <Play size={14} className={mediaVideoUrl ? "text-emerald-600 shrink-0" : "text-rose-600 shrink-0"} />
                           <span className="truncate">
                             {mediaVideoFileName ? `업로드 파일: ${mediaVideoFileName}` : `영상 링크: ${mediaVideoUrl}`}
                           </span>
@@ -1435,7 +1445,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                             <Loader2 size={11} className="animate-spin" /> 서버 전송 중...
                           </span>
                         ) : mediaVideoUrl ? (
-                          <span className="text-[11px] font-sans font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md shrink-0">
+                          <span className="text-[11px] font-sans font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md shrink-0 flex items-center gap-1">
                             ✓ 업로드 완료
                           </span>
                         ) : (
