@@ -57,6 +57,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const [memberInputs, setMemberInputs] = useState<string[]>([""]);
   const [resolvedMembers, setResolvedMembers] = useState<TeamMemberDetail[]>([]);
   const [memberLookupMessage, setMemberLookupMessage] = useState<string>("");
+  const [activeSearchIdx, setActiveSearchIdx] = useState<number | null>(null);
 
   // 2. 미디어 4종 다중 선택 및 우선순위 (1~4)
   const [enabledMedia, setEnabledMedia] = useState<{
@@ -384,6 +385,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
 
   const handleRemoveMemberInput = (index: number) => {
     setMemberInputs(prev => prev.filter((_, i) => i !== index));
+    if (activeSearchIdx === index) setActiveSearchIdx(null);
   };
 
   const handleMemberInputChange = (index: number, val: string) => {
@@ -392,6 +394,93 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
       next[index] = val;
       return next;
     });
+  };
+
+  // 검색어에 따른 학생 후보군 자동 필터링 (이름, 이메일, 학번, 학과)
+  const getMemberSuggestions = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q || q.length < 1) return [];
+
+    const currentUserId = currentUser?.id?.toLowerCase();
+    const currentUserEmail = currentUser?.email?.toLowerCase();
+    const resolvedEmails = resolvedMembers.map(m => m.email?.toLowerCase());
+
+    const allCandidates: { id: string; name: string; email: string; department: string; studentNumber: string }[] = [];
+
+    // 1) users에서 검색
+    users.forEach(u => {
+      const uId = u.id?.toLowerCase();
+      const uEmail = u.email?.toLowerCase();
+      if (uId === currentUserId || uEmail === currentUserEmail) return;
+      if (resolvedEmails.includes(uEmail)) return;
+
+      const nameMatch = u.name?.toLowerCase().includes(q);
+      const emailMatch = u.email?.toLowerCase().includes(q);
+      const numberMatch = u.studentNumber?.toLowerCase().includes(q);
+      const deptMatch = u.department?.toLowerCase().includes(q);
+
+      if (nameMatch || emailMatch || numberMatch || deptMatch) {
+        allCandidates.push({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          department: u.department || "창업학부",
+          studentNumber: u.studentNumber || "",
+        });
+      }
+    });
+
+    // 2) roster에서 검색
+    roster.forEach(r => {
+      const rEmail = r.email?.toLowerCase();
+      if (rEmail === currentUserEmail) return;
+      if (resolvedEmails.includes(rEmail)) return;
+      if (allCandidates.some(c => c.email.toLowerCase() === rEmail)) return;
+
+      const nameMatch = r.name?.toLowerCase().includes(q);
+      const emailMatch = r.email?.toLowerCase().includes(q);
+      const numberMatch = r.studentNumber?.toLowerCase().includes(q);
+      const deptMatch = r.department?.toLowerCase().includes(q);
+
+      if (nameMatch || emailMatch || numberMatch || deptMatch) {
+        allCandidates.push({
+          id: r.email,
+          name: r.name,
+          email: r.email,
+          department: r.department || "창업학부",
+          studentNumber: r.studentNumber || "",
+        });
+      }
+    });
+
+    return allCandidates.slice(0, 5); // 상위 5명
+  };
+
+  // 자동완성 드롭다운에서 학생을 클릭했을 때 즉시 팀원으로 반영
+  const handleSelectSuggestedMember = (index: number, candidate: { id: string; name: string; email: string; department: string; studentNumber: string }) => {
+    setMemberInputs(prev => {
+      const next = [...prev];
+      next[index] = candidate.email;
+      return next;
+    });
+
+    setResolvedMembers(prev => {
+      const exists = prev.some(m => m.email.toLowerCase() === candidate.email.toLowerCase());
+      if (exists) return prev;
+      return [
+        ...prev,
+        {
+          id: candidate.id,
+          email: candidate.email,
+          name: candidate.name,
+          department: candidate.department,
+          studentNumber: candidate.studentNumber,
+        }
+      ];
+    });
+
+    setMemberLookupMessage(`✅ ${candidate.name} (${candidate.department} · ${candidate.studentNumber}) 학생이 팀원으로 추가되었습니다.`);
+    setActiveSearchIdx(null);
   };
 
   // 3. 미디어 파일 업로드 핸들러들
@@ -815,18 +904,33 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
               </span>
 
               {resolvedMembers.map((m, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium text-[11px] border border-indigo-200">
+                <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 font-medium text-[11px] border border-indigo-200 shadow-2xs">
                   <span className="px-1 py-0.2 rounded bg-indigo-600 text-white text-[9px] font-bold">팀원</span>
                   <span>{m.name} {m.department ? `· ${m.department}` : ""} {m.studentNumber ? `(${m.studentNumber})` : ""}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResolvedMembers(prev => prev.filter((_, i) => i !== idx));
+                      setMemberInputs(prev => prev.filter((val) => val.toLowerCase() !== m.email.toLowerCase()));
+                      setMemberLookupMessage(`팀원 [${m.name}] 학생이 제외되었습니다.`);
+                    }}
+                    className="p-0.5 text-indigo-400 hover:text-rose-600 hover:bg-white rounded transition cursor-pointer"
+                    title="팀원 목록에서 제외"
+                  >
+                    <X size={12} />
+                  </button>
                 </span>
               ))}
             </div>
 
             {/* 팀원 등록 펼침 화면 */}
             {showMemberSettings && (
-              <div className="mt-3 pt-3 border-t border-indigo-200/60 space-y-3 bg-white p-3.5 rounded-xl border border-indigo-100">
+              <div className="mt-3 pt-3 border-t border-indigo-200/60 space-y-3 bg-white p-3.5 rounded-xl border border-indigo-100 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">팀원 아이디(이메일 또는 학번) 입력</span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">팀원 검색 및 추가</span>
+                    <span className="block text-[10px] text-indigo-600 font-medium">이름, 이메일, 또는 학번을 1글자만 쳐도 아래에 학생 목록이 자동 검색됩니다.</span>
+                  </div>
                   <button
                     type="button"
                     onClick={handleAddMemberInput}
@@ -836,25 +940,89 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {memberInputs.map((val, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={val}
-                        onChange={(e) => handleMemberInputChange(idx, e.target.value)}
-                        placeholder="팀원의 가입 이메일 또는 회원 아이디 입력"
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs focus:border-indigo-500 focus:outline-none"
-                      />
-                      {memberInputs.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMemberInput(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                          title="삭제"
-                        >
-                          <Minus size={14} />
-                        </button>
+                    <div key={idx} className="relative">
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            value={val}
+                            onFocus={() => setActiveSearchIdx(idx)}
+                            onBlur={() => setTimeout(() => setActiveSearchIdx(null), 250)}
+                            onChange={(e) => {
+                              handleMemberInputChange(idx, e.target.value);
+                              setActiveSearchIdx(idx);
+                            }}
+                            placeholder="팀원 이름(예: 홍길동), 이메일, 또는 학번 입력..."
+                            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all outline-none"
+                          />
+                          {val && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleMemberInputChange(idx, "");
+                                setActiveSearchIdx(null);
+                              }}
+                              className="absolute right-2.5 top-2.5 text-slate-300 hover:text-slate-500 p-0.5"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                        {memberInputs.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMemberInput(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                            title="입력칸 삭제"
+                          >
+                            <Minus size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* 자동완성 드롭다운 검색 결과 */}
+                      {activeSearchIdx === idx && val.trim().length >= 1 && (
+                        <div className="absolute left-0 right-8 top-full mt-1 bg-white border border-indigo-200 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                          {getMemberSuggestions(val).length > 0 ? (
+                            getMemberSuggestions(val).map((candidate) => (
+                              <button
+                                type="button"
+                                key={candidate.id}
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); // onBlur 조기 발생 방지
+                                  handleSelectSuggestedMember(idx, candidate);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-indigo-50/80 flex items-center justify-between transition cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
+                                    {candidate.name.slice(0, 1)}
+                                  </span>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                      <span>{candidate.name}</span>
+                                      <span className="text-[10px] font-normal text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded">
+                                        {candidate.department} · {candidate.studentNumber}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                      {candidate.email}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md group-hover:bg-indigo-600 group-hover:text-white transition">
+                                  선택 +
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-3 text-center text-xs text-slate-400 font-medium">
+                              검색어와 일치하는 가입 학생이 없습니다.
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -868,7 +1036,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                   >
                     <Check size={13} /> 팀원 확인 및 저장하기
                   </button>
-                  <span className="text-[11px] text-slate-400">회원가입 정보와 자동 대조됩니다</span>
+                  <span className="text-[11px] text-slate-400">목록에서 클릭하거나 직접 입력 후 저장하세요</span>
                 </div>
 
                 {memberLookupMessage && (
