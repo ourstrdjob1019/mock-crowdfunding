@@ -144,14 +144,14 @@ ALTER TABLE public.investments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Full Access Investments" ON public.investments;
 CREATE POLICY "Public Full Access Investments" ON public.investments FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 4. Supabase Storage 버킷 생성 및 권한 완전 허용
-INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('project-thumbnails', 'project-thumbnails', true, 10485760)
-ON CONFLICT (id) DO UPDATE SET public = true;
+-- 4. Supabase Storage 버킷 생성 및 권한 완전 허용 (동영상, PDF, 이미지, HTML 모두 허용: allowed_mime_types = NULL)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('project-thumbnails', 'project-thumbnails', true, 10485760, NULL)
+ON CONFLICT (id) DO UPDATE SET public = true, allowed_mime_types = NULL;
 
-INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('landing-files', 'landing-files', true, 209715200)
-ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 209715200;
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('landing-files', 'landing-files', true, 52428800, NULL)
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800, allowed_mime_types = NULL;
 
 DROP POLICY IF EXISTS "Public Storage Read" ON storage.objects;
 CREATE POLICY "Public Storage Read" ON storage.objects

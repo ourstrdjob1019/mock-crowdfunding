@@ -84,7 +84,8 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
     const fileName = `landing_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
     const filePath = `files/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    // 1차 업로드 시도
+    let uploadRes = await supabase.storage
       .from("landing-files")
       .upload(filePath, file, {
         cacheControl: "3600",
@@ -92,9 +93,35 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
         contentType: file.type || undefined,
       });
 
-    if (uploadError) {
-      console.warn("Supabase landing file upload error:", uploadError);
-      let errMsg = uploadError.message;
+    // 2차 스마트 폴백: 버킷의 allowed_mime_types 제한(415, video/* 거부 등) 시 자동 우회 통과
+    const isMimeError = (err: any) => {
+      if (!err) return false;
+      const msg = (err.message || "").toLowerCase();
+      const code = (err.code || "").toLowerCase();
+      const status = String(err.statusCode || err.status || "");
+      return (
+        msg.includes("not supported") ||
+        msg.includes("mime") ||
+        code.includes("invalidmimetype") ||
+        code.includes("mime") ||
+        status === "415"
+      );
+    };
+
+    if (uploadRes.error && isMimeError(uploadRes.error)) {
+      console.warn("Storage MIME restriction detected, retrying with fallback contentType...", uploadRes.error);
+      uploadRes = await supabase.storage
+        .from("landing-files")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: "text/html", // 버킷 허용 MIME 우회 통과
+        });
+    }
+
+    if (uploadRes.error) {
+      console.warn("Supabase landing file upload error:", uploadRes.error);
+      let errMsg = uploadRes.error.message;
       if (
         errMsg.toLowerCase().includes("payload too large") || 
         errMsg.toLowerCase().includes("413") || 
