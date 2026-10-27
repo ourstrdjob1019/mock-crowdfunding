@@ -1,10 +1,29 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { User, Project, Investment, Event, EventStage } from "@/types";
+const EXT_TAG_REGEX = /<!--PROJECT_EXT_DATA:([\s\S]*?)-->/;
+const EXT_TAG_PREFIX = "\n\n<!--PROJECT_EXT_DATA:";
+const EXT_TAG_SUFFIX = "-->";
 
 /**
  * DB 컬럼 (snake_case) -> Project (camelCase) 변환
+ * (신규 컬럼이 아직 DB에 없는 경우 description에 안전 임베드된 메타데이터 자동 복원)
  */
 export function mapDbProjectToModel(row: any): Project {
+  let description = row.description || "";
+  let extData: any = {};
+
+  if (typeof description === "string" && description.includes("<!--PROJECT_EXT_DATA:")) {
+    const match = description.match(EXT_TAG_REGEX);
+    if (match && match[1]) {
+      try {
+        extData = JSON.parse(match[1]);
+        description = description.replace(EXT_TAG_REGEX, "").trim();
+      } catch (e) {
+        console.warn("[SupabaseService] Failed to parse embedded project ext data:", e);
+      }
+    }
+  }
+
   return {
     id: String(row.id),
     eventId: row.event_id || "evt-2026-fall-01",
@@ -13,7 +32,7 @@ export function mapDbProjectToModel(row: any): Project {
     teamNumber: row.team_number || 1,
     title: row.title || "",
     summary: row.summary || "",
-    description: row.description || "",
+    description,
     thumbnailUrl: row.thumbnail_url || "",
     landingFormat: row.landing_format || "IMAGE",
     landingUrl: row.landing_url || "",
@@ -21,12 +40,20 @@ export function mapDbProjectToModel(row: any): Project {
     authorId: row.author_id,
     authorName: row.author_name,
     authorEmail: row.author_email,
-    category: row.category || "AI/SaaS",
-    targetCredits: Number(row.target_credits) || 20000,
-    pitchHighlights: Array.isArray(row.pitch_highlights) ? row.pitch_highlights : [],
-    teamMemberIds: Array.isArray(row.team_member_ids) ? row.team_member_ids : [],
-    teamMemberDetails: Array.isArray(row.team_member_details) ? row.team_member_details : [],
-    mediaItems: Array.isArray(row.media_items) ? row.media_items : [],
+    category: row.category || extData.category || "AI/SaaS",
+    targetCredits: Number(row.target_credits) || Number(extData.targetCredits) || 20000,
+    pitchHighlights: (Array.isArray(row.pitch_highlights) && row.pitch_highlights.length > 0)
+      ? row.pitch_highlights 
+      : (Array.isArray(extData.pitchHighlights) ? extData.pitchHighlights : []),
+    teamMemberIds: (Array.isArray(row.team_member_ids) && row.team_member_ids.length > 0)
+      ? row.team_member_ids 
+      : (Array.isArray(extData.teamMemberIds) ? extData.teamMemberIds : []),
+    teamMemberDetails: (Array.isArray(row.team_member_details) && row.team_member_details.length > 0)
+      ? row.team_member_details 
+      : (Array.isArray(extData.teamMemberDetails) ? extData.teamMemberDetails : []),
+    mediaItems: (Array.isArray(row.media_items) && row.media_items.length > 0)
+      ? row.media_items 
+      : (Array.isArray(extData.mediaItems) ? extData.mediaItems : []),
     lastModifierName: row.last_modifier_name,
     lastModifiedAt: row.last_modified_at,
     isHidden: Boolean(row.is_hidden),
@@ -267,6 +294,37 @@ async function syncTeamToDb(teamId: string, teamName: string, teamNumber: number
 }
 
 /**
+ * 구버전 DB 스키마(신규 컬럼 누락 시) 호환을 위해 메타데이터를 description에 안전하게 임베드하는 헬퍼
+ */
+function buildEmbeddedPayload(proj: Partial<Project>, isUpdate = false): Record<string, any> {
+  const dbProj = mapModelProjectToDb(proj);
+  if (isUpdate) delete dbProj.id;
+
+  const extData: Record<string, any> = {};
+  if (proj.category !== undefined) extData.category = proj.category;
+  if (proj.targetCredits !== undefined) extData.targetCredits = proj.targetCredits;
+  if (proj.pitchHighlights !== undefined) extData.pitchHighlights = proj.pitchHighlights;
+  if (proj.teamMemberIds !== undefined) extData.teamMemberIds = proj.teamMemberIds;
+  if (proj.teamMemberDetails !== undefined) extData.teamMemberDetails = proj.teamMemberDetails;
+  if (proj.mediaItems !== undefined) extData.mediaItems = proj.mediaItems;
+
+  delete dbProj.category;
+  delete dbProj.target_credits;
+  delete dbProj.pitch_highlights;
+  delete dbProj.team_member_ids;
+  delete dbProj.team_member_details;
+  delete dbProj.media_items;
+
+  let baseDesc = (proj.description || "").replace(EXT_TAG_REGEX, "").trim();
+  if (Object.keys(extData).length > 0) {
+    baseDesc = `${baseDesc}${EXT_TAG_PREFIX}${JSON.stringify(extData)}${EXT_TAG_SUFFIX}`;
+  }
+  dbProj.description = baseDesc;
+
+  return dbProj;
+}
+
+/**
  * 새 프로젝트 등록 (Supabase DB: teams 테이블과 projects 테이블 동시 등록)
  */
 export async function dbInsertProject(project: Project): Promise<{ success: boolean; error?: string }> {
@@ -279,8 +337,18 @@ export async function dbInsertProject(project: Project): Promise<{ success: bool
     }
 
     // 2. projects 테이블에 프로젝트 등록
+    // 1차: 신규 컬럼 포함 전체 insert 시도
     const dbProj = mapModelProjectToDb(project);
-    const { error } = await supabase.from("projects").insert([dbProj]);
+    let { error } = await supabase.from("projects").insert([dbProj]);
+
+    // 2차: 신규 컬럼 미존재(PGRST204 등) 시 description에 메타데이터를 임베드하여 100% 안전 저장
+    if (error && (error.message?.includes("column") || error.code === "PGRST204" || error.code === "42703")) {
+      console.warn("[SupabaseService] DB schema missing new columns, inserting with embedded metadata fallback...", error.message);
+      const fallbackPayload = buildEmbeddedPayload(project, false);
+      const retryRes = await supabase.from("projects").insert([fallbackPayload]);
+      error = retryRes.error;
+    }
+
     if (error) {
       console.error("[SupabaseService] dbInsertProject error:", error);
       return { success: false, error: error.message };
@@ -303,9 +371,19 @@ export async function dbUpdateProject(projectId: string, updates: Partial<Projec
       await supabase.from("team").update({ name: updates.teamName }).eq("id", updates.teamId);
     }
 
+    // 1차: 신규 컬럼 포함 전체 update 시도
     const dbUpdates = mapModelProjectToDb(updates);
     delete dbUpdates.id;
-    const { error } = await supabase.from("projects").update(dbUpdates).eq("id", projectId);
+    let { error } = await supabase.from("projects").update(dbUpdates).eq("id", projectId);
+
+    // 2차: 신규 컬럼 미존재 시 description에 임베드하여 안전 수정
+    if (error && (error.message?.includes("column") || error.code === "PGRST204" || error.code === "42703")) {
+      console.warn("[SupabaseService] DB schema missing new columns, updating with embedded metadata fallback...", error.message);
+      const fallbackUpdates = buildEmbeddedPayload(updates, true);
+      const retryRes = await supabase.from("projects").update(fallbackUpdates).eq("id", projectId);
+      error = retryRes.error;
+    }
+
     if (error) {
       console.error("[SupabaseService] dbUpdateProject error:", error);
       return { success: false, error: error.message };

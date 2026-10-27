@@ -449,7 +449,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // 1. Supabase DB 저장 (projects 및 teams 테이블 동시 저장)
     const dbRes = await dbInsertProject(newProject);
     if (!dbRes.success) {
-      console.warn("[AppContext] Supabase DB insert failed:", dbRes.error);
+      console.error("[AppContext] Supabase DB insert failed:", dbRes.error);
+      return {
+        success: false,
+        message: `프로젝트 DB 저장 실패: ${dbRes.error || "데이터베이스에 저장할 수 없습니다."}`,
+      };
     }
 
     // 2. 출품 등록자의 소속 팀 정보도 함께 갱신
