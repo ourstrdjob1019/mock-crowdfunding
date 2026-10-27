@@ -70,9 +70,13 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
     return { url: null, error: "Supabase 환경변수가 설정되지 않았습니다." };
   }
 
-  // 150MB 제한
-  if (file.size > 150 * 1024 * 1024) {
-    return { url: null, error: "출품 파일 크기는 150MB 이하만 업로드 가능합니다." };
+  // Supabase 무료 플랜 단일 파일 최대 용량 50MB 체크
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+  if (file.size > 50 * 1024 * 1024) {
+    return { 
+      url: null, 
+      error: `파일 용량이 50MB를 초과합니다 (현재 ${sizeMb}MB). Supabase 스토리지 단일 파일 한도는 50MB입니다. 50MB 이하로 용량을 줄이시거나, 유튜브/외부 영상 링크를 입력해 주세요.` 
+    };
   }
 
   try {
@@ -85,11 +89,20 @@ export async function uploadLandingFile(file: File): Promise<{ url: string | nul
       .upload(filePath, file, {
         cacheControl: "3600",
         upsert: true,
+        contentType: file.type || undefined,
       });
 
     if (uploadError) {
       console.warn("Supabase landing file upload error:", uploadError);
-      return { url: null, error: `파일 저장 실패: ${uploadError.message}` };
+      let errMsg = uploadError.message;
+      if (
+        errMsg.toLowerCase().includes("payload too large") || 
+        errMsg.toLowerCase().includes("413") || 
+        errMsg.toLowerCase().includes("entity too large")
+      ) {
+        errMsg = "파일 용량이 스토리지 업로드 한도(50MB)를 초과했습니다. 파일 크기를 50MB 이하로 줄여주세요.";
+      }
+      return { url: null, error: `파일 저장 실패: ${errMsg}` };
     }
 
     const { data } = supabase.storage

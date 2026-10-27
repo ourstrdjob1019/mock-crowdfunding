@@ -495,30 +495,27 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setMediaVideoFileName(file.name);
-    setUploadStatus("동영상 Storage 서버 업로드 중입니다. 잠시만 기다려주세요...");
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    setMediaVideoFileName(`${file.name} (${sizeMb} MB)`);
+    setUploadStatus(`동영상 Storage 서버 업로드 중... (${sizeMb} MB)`);
     setIsUploading(true);
     setErrorMessage("");
-
-    // 업로드 중 즉시 로컬 미리보기를 위해 임시 URL 설정
-    const tempBlobUrl = URL.createObjectURL(file);
-    setMediaVideoUrl(tempBlobUrl);
-    setMediaVideoType("FILE");
 
     try {
       const res = await uploadLandingFile(file);
       if (res.url) {
         setMediaVideoUrl(res.url); // 영구 Public URL로 즉시 교체
+        setMediaVideoType("FILE");
         setUploadStatus("✅ 동영상 업로드 완료!");
         setTimeout(() => setUploadStatus(""), 2500);
       } else {
-        setErrorMessage(res.error || "동영상 업로드에 실패했습니다. (150MB 이하 파일 권장)");
-        setMediaVideoUrl("");
+        setErrorMessage(res.error || "동영상 업로드에 실패했습니다.");
+        setUploadStatus(""); // 에러 시 업로드 상태 해제
       }
     } catch (err: any) {
       console.warn("Video upload warning:", err);
       setErrorMessage(`동영상 업로드 오류: ${err.message || err}`);
-      setMediaVideoUrl("");
+      setUploadStatus(""); // 에러 시 업로드 상태 해제
     } finally {
       setIsUploading(false);
     }
@@ -1256,12 +1253,28 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
                       />
                     </div>
 
-                    {mediaVideoUrl && (
-                      <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-mono">
-                        <Play size={14} className="text-rose-600 shrink-0" />
-                        <span className="truncate">
-                          {mediaVideoFileName ? `업로드 영상: ${mediaVideoFileName}` : `영상 링크: ${mediaVideoUrl}`}
-                        </span>
+                    {/* 동영상 업로드 파일명 및 상태 표시 */}
+                    {(mediaVideoFileName || mediaVideoUrl) && (
+                      <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-900 font-mono">
+                        <div className="flex items-center gap-2 truncate">
+                          <Play size={14} className="text-rose-600 shrink-0" />
+                          <span className="truncate">
+                            {mediaVideoFileName ? `업로드 파일: ${mediaVideoFileName}` : `영상 링크: ${mediaVideoUrl}`}
+                          </span>
+                        </div>
+                        {isUploading ? (
+                          <span className="text-[11px] font-sans font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0 animate-pulse">
+                            <Loader2 size={11} className="animate-spin" /> 서버 전송 중...
+                          </span>
+                        ) : mediaVideoUrl ? (
+                          <span className="text-[11px] font-sans font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md shrink-0">
+                            ✓ 업로드 완료
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-sans font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md shrink-0">
+                            ⚠️ 업로드 실패
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
