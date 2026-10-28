@@ -132,49 +132,27 @@ function MainDashboard() {
               <span>D-DAY · 실시간 가상 펀딩 세션 진행 중</span>
             </div>
 
-            {/* Role Switcher Toggle */}
-            <div className="flex items-center p-0.5 sm:p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-medium">
-              <button
-                type="button"
-                onClick={() => {
-                  const studentUser = users.find((u) => u.role === "STUDENT") || users[0];
-                  if (studentUser) {
-                    setCurrentUser(studentUser);
-                    if (currentTab === "admin") setCurrentTab("gallery");
-                    showToast(`👤 [${studentUser.name}] 학생 / 투자자 모드로 전환되었습니다.`);
-                  }
-                }}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-md transition duration-150 flex items-center gap-1 sm:gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
-                  currentUser?.role !== "ADMIN"
-                    ? "bg-white text-blue-700 font-bold shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">학생 / 투자자</span>
-                <span className="xs:hidden">학생</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const adminUser = users.find((u) => u.role === "ADMIN");
-                  if (adminUser) {
-                    setCurrentUser(adminUser);
-                    setCurrentTab("admin");
-                    showToast("⚙️ [총괄 관리자] 모드로 전환되었습니다. 콘솔이 활성화됩니다.");
-                  }
-                }}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-md transition duration-150 flex items-center gap-1 sm:gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
-                  currentUser?.role === "ADMIN"
-                    ? "bg-slate-900 text-white font-bold shadow-2xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden xs:inline">총괄 관리자</span>
-                <span className="xs:hidden">관리자</span>
-              </button>
+            {/* Current Logged-in User Status Badge (Account Switching Blocked) */}
+            <div className="flex items-center px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px] sm:text-xs font-medium text-slate-700 gap-1.5">
+              {currentUser?.role === "ADMIN" ? (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="font-bold text-slate-900">{currentUser.name}</span>
+                  <span className="hidden xs:inline text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                    관리자
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="font-bold text-slate-900 truncate max-w-[90px] sm:max-w-[140px]">
+                    {currentUser?.name}
+                  </span>
+                  <span className="hidden xs:inline text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
+                    {currentUser?.role === "JUDGE" ? "심사위원" : "학생"}
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Quick Logout Button */}
@@ -412,7 +390,7 @@ function MainDashboard() {
             )}
 
             {/* VIEW 4: ADMIN DASHBOARD */}
-            {currentTab === "admin" && (
+            {currentTab === "admin" && currentUser?.role === "ADMIN" && (
               <AdminDashboard
                 openProjectorRanking={() => setIsProjectorRankingOpen(true)}
               />

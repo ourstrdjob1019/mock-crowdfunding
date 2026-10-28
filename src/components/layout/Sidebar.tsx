@@ -228,8 +228,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* 5. Bottom User Profile & Switcher */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3 shrink-0">
+      {/* 5. Bottom User Profile */}
+      <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
         <div className="bg-white rounded-2xl p-3 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-xs shrink-0">
@@ -256,32 +256,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <LogOut className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Quick simulator switch */}
-        <div>
-          <label className="block text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1">
-            빠른 계정 전환 (시뮬레이터)
-          </label>
-          <select
-            value={currentUser.id}
-            onChange={(e) => {
-              const selected = users.find((u) => u.id === e.target.value);
-              if (selected) {
-                setCurrentUser(selected);
-                if (selected.role !== "ADMIN" && currentTab === "admin") {
-                  setCurrentTab("gallery");
-                }
-              }
-            }}
-            className="w-full text-xs font-mono p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none cursor-pointer"
-          >
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                [{u.role === "ADMIN" ? "관리자" : u.role === "JUDGE" ? "심사위원" : "학생"}] {u.name} ({u.teamName || u.department || "참가자"})
-              </option>
-            ))}
-          </select>
         </div>
       </div>
     </>

@@ -221,11 +221,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: "비밀번호를 입력해 주세요." };
     }
 
-    // 1. 현재 로드된 users 목록에서 먼저 찾기
-    let targetUser = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+    let targetUser: User | undefined;
 
-    // 2. 없으면 Supabase DB 테이블에서 실시간 직접 검색 (관리자가 방금 DB에 추가했을 경우 대비)
-    if (!targetUser && supabase) {
+    // 1. Supabase DB 테이블에서 실시간 직접 검색 우선 수행 (최신 비밀번호 및 계정 동기화)
+    if (supabase) {
       try {
         const { data: dbUser } = await supabase
           .from("users")
@@ -242,6 +241,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // 2. DB에서 못 찾았을 경우 현재 로드된 users 목록에서 찾기
+    if (!targetUser) {
+      targetUser = users.find((u) => u.email.toLowerCase() === trimmedEmail);
+    }
+
     if (!targetUser) {
       return {
         success: false,
@@ -249,8 +253,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // 비밀번호 체크
-    if (targetUser.password && targetUser.password !== password) {
+    // 비밀번호 엄격 검증 (필수 일치)
+    const expectedPassword = targetUser.password || "password123";
+    if (expectedPassword !== password) {
       return {
         success: false,
         message: "비밀번호가 올바르지 않습니다. 다시 입력해 주세요.",
@@ -264,15 +269,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { success: true, message: `${targetUser.name}님 환영합니다.` };
   };
 
-  // 데모 간편 로그인
-  const demoLogin = (userId: string) => {
-    const target = users.find((u) => u.id === userId);
-    if (target) {
-      setCurrentUserState(target);
-      setIsLoggedIn(true);
-      localStorage.removeItem("mc_logged_out");
-      localStorage.setItem("mc_current_user_id", target.id);
-    }
+  // 데모 간편 로그인 (비활성화 - 이메일 및 비밀번호 인증 필수)
+  const demoLogin = (_userId: string) => {
+    console.warn("보안 정책에 의해 간편 로그인 및 계정 전환이 차단되었습니다.");
   };
 
   // 회원가입 (Supabase DB + LocalStorage 동시 저장)
@@ -365,10 +364,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setCurrentUser = (user: User) => {
-    setCurrentUserState(user);
-    setIsLoggedIn(true);
-    localStorage.removeItem("mc_logged_out");
-    localStorage.setItem("mc_current_user_id", user.id);
+    // 현재 로그인된 본인 계정의 정보 갱신만 허용 (타 계정으로 무단 전환 원천 차단)
+    if (currentUser && currentUser.id === user.id) {
+      setCurrentUserState(user);
+    }
   };
 
   const userInvestments = currentUser
