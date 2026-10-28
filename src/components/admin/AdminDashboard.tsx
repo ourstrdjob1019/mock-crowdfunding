@@ -16,7 +16,8 @@ import {
   X,
   Users,
   Eye,
-  EyeOff
+  EyeOff,
+  RotateCcw
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -34,6 +35,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ openProjectorRan
     investments,
     users,
     resetPassword,
+    resetAllInvestments,
     refreshFromSupabase,
   } = useApp();
 
@@ -194,6 +196,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ openProjectorRan
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
             <span>DB 동기화</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              if (confirm("모든 프로젝트의 누적 투자액과 참여 투자 내역을 0 CR로 일괄 초기화하시겠습니까?")) {
+                const res = await resetAllInvestments();
+                showToast(`🧹 ${res.message}`);
+              }
+            }}
+            className="px-3 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/70 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+            <span>투자 전체 0원 초기화</span>
           </button>
 
           <button

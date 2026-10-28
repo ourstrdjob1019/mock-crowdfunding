@@ -12,6 +12,7 @@ import {
   dbDeleteProject,
   dbSaveInvestment,
   dbDeleteInvestment,
+  dbResetAllInvestments,
   dbUpdateEvent,
   mapDbUserToModel,
 } from "@/lib/supabaseService";
@@ -62,6 +63,7 @@ interface AppContextType {
   ) => Promise<{ success: boolean; project?: Project; message: string }>;
   updateProject: (project: Partial<Project> & { id: string }) => Promise<{ success: boolean; message: string }>;
   deleteProject: (projectId: string) => Promise<{ success: boolean; message: string }>;
+  resetAllInvestments: () => Promise<{ success: boolean; message: string }>;
   resetAllData: () => void;
   refreshFromSupabase: () => Promise<void>;
 }
@@ -79,7 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v13_clean_production_empty_projects";
+  const STORAGE_VERSION = "v14_strict_auth_and_live_investments_sync";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {
@@ -757,6 +759,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveToStorage(event, updatedProjects, nonUserInvestments, users);
   };
 
+  // 8. 관리자 기능: 전체 투자 내역 0원 리셋 (Supabase DB + LocalStorage)
+  const resetAllInvestments = async (): Promise<{ success: boolean; message: string }> => {
+    await dbResetAllInvestments();
+    const zeroedProjects = projects.map((p) => ({
+      ...p,
+      totalCredits: 0,
+      investorCount: 0,
+    }));
+    setInvestments([]);
+    setProjects(zeroedProjects);
+    localStorage.removeItem("mc_investments");
+    saveToStorage(event, zeroedProjects, [], users);
+    return {
+      success: true,
+      message: "모든 프로젝트의 투자 내역과 누적 펀딩액이 0 CR로 완전히 초기화되었습니다.",
+    };
+  };
+
   const resetAllData = () => {
     localStorage.removeItem("mc_event");
     localStorage.removeItem("mc_projects");
@@ -802,6 +822,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createProject,
         updateProject,
         deleteProject,
+        resetAllInvestments,
         resetAllData,
         refreshFromSupabase,
       }}

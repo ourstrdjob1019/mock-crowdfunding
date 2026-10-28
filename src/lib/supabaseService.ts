@@ -209,8 +209,30 @@ export async function fetchAllFromSupabase(): Promise<{
     }
 
     const users = (usersRes.data || []).map(mapDbUserToModel);
-    const projects = (projectsRes.data || []).map(mapDbProjectToModel);
     const investments = (investmentsRes.data || []).map(mapDbInvestmentToModel);
+
+    // 실제 investments 테이블 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 재계산하여 강제 동기화
+    // (Supabase에서 investments 행을 삭제했을 때 projects 테이블에 남은 이전 캐시 숫자가 그대로 뜨는 현상 해결)
+    const projects = (projectsRes.data || []).map((row) => {
+      const proj = mapDbProjectToModel(row);
+      const projInvs = investments.filter((inv) => inv.projectId === proj.id);
+      const actualTotal = projInvs.reduce((sum, inv) => sum + inv.amount, 0);
+      const actualCount = projInvs.length;
+
+      if (proj.totalCredits !== actualTotal || proj.investorCount !== actualCount) {
+        supabase!
+          .from("projects")
+          .update({ total_credits: actualTotal, investor_count: actualCount })
+          .eq("id", proj.id)
+          .then(() => {});
+      }
+
+      return {
+        ...proj,
+        totalCredits: actualTotal,
+        investorCount: actualCount,
+      };
+    });
 
     return { event, users, projects, investments };
   } catch (err: any) {
@@ -492,6 +514,23 @@ export async function dbDeleteInvestment(
       total_credits: newProjectTotal,
       investor_count: newInvestorCount,
     }).eq("id", projectId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * 전체 투자 내역 일괄 초기화 (Supabase DB: investments 전체 삭제 및 모든 프로젝트 누적액 0원 초기화)
+ */
+export async function dbResetAllInvestments(): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: "Supabase not configured" };
+  try {
+    await supabase.from("investments").delete().neq("id", "");
+    await supabase.from("projects").update({
+      total_credits: 0,
+      investor_count: 0,
+    }).neq("id", "");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
