@@ -81,7 +81,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v14_strict_auth_and_live_investments_sync";
+  const STORAGE_VERSION = "v15_unhide_all_projects_clean";
 
   const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
     try {

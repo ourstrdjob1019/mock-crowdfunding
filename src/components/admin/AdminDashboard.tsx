@@ -455,7 +455,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ openProjectorRan
                           <td className="py-3 px-4 text-center">
                             <button
                               type="button"
-                              onClick={() => toggleProjectVisibility(team.id)}
+                              onClick={() => {
+                                if (!team.isHidden && !confirm(`[${team.title}] 프로젝트를 갤러리에서 숨김 처리하시겠습니까?`)) {
+                                  return;
+                                }
+                                toggleProjectVisibility(team.id);
+                              }}
                               className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold cursor-pointer transition ${
                                 team.isHidden
                                   ? "bg-rose-50 text-rose-700 border border-rose-200"
