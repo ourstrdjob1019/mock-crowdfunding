@@ -1,14 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const rawUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://vemtlrgjhafjgqbdyzfg.supabase.co";
 const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_cChFKo9D6H-gVnpuuLc60Q_zQP-C4ji";
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * 파일 확장자 안전 정규화 (한글/특수문자/공백 제거 및 소문자화)

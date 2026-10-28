@@ -81,86 +81,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const STORAGE_VERSION = "v15_unhide_all_projects_clean";
+  const STORAGE_VERSION = "v16_supabase_single_source_of_truth";
 
-  const saveToStorage = (newEvent: Event, newProjects: Project[], newInvestments: Investment[], newUsers: User[]) => {
+  // 로컬스토리지 용량 초과(QuotaExceededError) 및 구버전 캐시 오염 방지를 위해
+  // 데이터는 오직 Supabase DB를 단일 원본(Single Source of Truth)으로 사용합니다.
+  const saveToStorage = (_newEvent: Event, _newProjects: Project[], _newInvestments: Investment[], _newUsers: User[]) => {
     try {
-      localStorage.setItem("mc_data_version", STORAGE_VERSION);
-      localStorage.setItem("mc_event", JSON.stringify(newEvent));
-      localStorage.setItem("mc_projects", JSON.stringify(newProjects));
-      localStorage.setItem("mc_investments", JSON.stringify(newInvestments));
-      localStorage.setItem("mc_users", JSON.stringify(newUsers));
-    } catch (e) {
-      console.warn("Local storage save failed:", e);
-    }
-  };
-
-  // Supabase 실시간 데이터 로딩 함수
-  const loadData = async () => {
-    setIsLoading(true);
-
-    const savedVersion = localStorage.getItem("mc_data_version");
-    const isLoggedOut = localStorage.getItem("mc_logged_out") === "true";
-    const savedCurrentUserId = localStorage.getItem("mc_current_user_id");
-
-    if (savedVersion !== STORAGE_VERSION) {
-      // 과거 캐시 완전 청소 후 기본 데이터 세팅
       localStorage.setItem("mc_data_version", STORAGE_VERSION);
       localStorage.removeItem("mc_projects");
       localStorage.removeItem("mc_investments");
-      setProjects([]);
-      setUsers(INITIAL_USERS);
-      setInvestments([]);
-
-      if (!isLoggedOut && savedCurrentUserId) {
-        const found = INITIAL_USERS.find((u) => u.id === savedCurrentUserId);
-        if (found) {
-          setCurrentUserState(found);
-          setIsLoggedIn(true);
-        } else {
-          setCurrentUserState(null);
-          setIsLoggedIn(false);
-        }
-      } else {
-        setCurrentUserState(null);
-        setIsLoggedIn(false);
-      }
-      saveToStorage(INITIAL_EVENT, [], [], INITIAL_USERS);
-    } else {
-      const savedProjects = localStorage.getItem("mc_projects");
-      const savedInvestments = localStorage.getItem("mc_investments");
-      const savedUsers = localStorage.getItem("mc_users");
-      const savedEvent = localStorage.getItem("mc_event");
-
-      const loadedProjects = savedProjects ? JSON.parse(savedProjects) : [];
-      const loadedInvestments = savedInvestments ? JSON.parse(savedInvestments) : [];
-      const loadedUsers = savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS;
-
-      setProjects(Array.isArray(loadedProjects) ? loadedProjects : []);
-      setInvestments(Array.isArray(loadedInvestments) ? loadedInvestments : []);
-      setUsers(loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS);
-
-      if (!isLoggedOut && savedCurrentUserId) {
-        const found = loadedUsers.find((u: User) => u.id === savedCurrentUserId);
-        if (found) {
-          setCurrentUserState(found);
-          setIsLoggedIn(true);
-        } else {
-          setCurrentUserState(null);
-          setIsLoggedIn(false);
-        }
-      } else {
-        setCurrentUserState(null);
-        setIsLoggedIn(false);
-      }
-      if (savedEvent) setEventState(JSON.parse(savedEvent));
+      localStorage.removeItem("mc_users");
+      localStorage.removeItem("mc_event");
+    } catch (e) {
+      console.warn("Local storage cleanup warning:", e);
     }
+  };
 
-    // Supabase DB 조회하여 실시간 최신화
+  // Supabase 실시간 데이터 로딩 함수 (오직 Supabase DB 기준)
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+
+    try {
+      // 이전 브라우저 로컬 캐시 완전 제거 (학생 폰에 남아있던 구버전 데이터 노출 원천 차단)
+      localStorage.removeItem("mc_projects");
+      localStorage.removeItem("mc_investments");
+      localStorage.removeItem("mc_users");
+      localStorage.removeItem("mc_event");
+      localStorage.setItem("mc_data_version", STORAGE_VERSION);
+    } catch {}
+
     try {
       const supaData = await fetchAllFromSupabase();
       if (!supaData.error) {
-        // Supabase DB에 있는 그대로 세팅 (0개면 0개 유지!)
         const finalProjects = Array.isArray(supaData.projects) ? supaData.projects : [];
         const finalInvestments = Array.isArray(supaData.investments) ? supaData.investments : [];
         const finalUsers = supaData.users && supaData.users.length > 0 ? supaData.users : INITIAL_USERS;
@@ -172,7 +124,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setEventState(supaData.event);
         }
 
-        // 로그인 유지 유저 동기화
+        // 로그인 유지 유저 동기화 (Supabase users 테이블 기준)
         const currentSavedId = localStorage.getItem("mc_current_user_id");
         const currentIsLoggedOut = localStorage.getItem("mc_logged_out") === "true";
         if (!currentIsLoggedOut && currentSavedId && finalUsers.length > 0) {
@@ -185,31 +137,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setIsLoggedIn(false);
             localStorage.removeItem("mc_current_user_id");
           }
-        } else {
+        } else if (currentIsLoggedOut || !currentSavedId) {
           setCurrentUserState(null);
           setIsLoggedIn(false);
         }
-
-        saveToStorage(
-          supaData.event || event,
-          finalProjects,
-          finalInvestments,
-          finalUsers
-        );
       }
     } catch (err) {
-      console.warn("Supabase initial fetch failed:", err);
+      console.warn("Supabase fetch failed:", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(false);
+
+    // 탭 활성화(포커스) 시 Supabase 최신 데이터 자동 동기화
+    const handleFocus = () => {
+      loadData(true);
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   const refreshFromSupabase = async () => {
-    await loadData();
+    await loadData(false);
   };
 
   // 로그인 로직 (메모리에 없으면 Supabase DB 직접 조회)

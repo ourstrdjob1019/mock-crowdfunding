@@ -211,21 +211,12 @@ export async function fetchAllFromSupabase(): Promise<{
     const users = (usersRes.data || []).map(mapDbUserToModel);
     const investments = (investmentsRes.data || []).map(mapDbInvestmentToModel);
 
-    // 실제 investments 테이블 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 재계산하여 강제 동기화
-    // (Supabase에서 investments 행을 삭제했을 때 projects 테이블에 남은 이전 캐시 숫자가 그대로 뜨는 현상 해결)
+    // Supabase investments 테이블 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 정확히 계산
     const projects = (projectsRes.data || []).map((row) => {
       const proj = mapDbProjectToModel(row);
       const projInvs = investments.filter((inv) => inv.projectId === proj.id);
       const actualTotal = projInvs.reduce((sum, inv) => sum + inv.amount, 0);
       const actualCount = projInvs.length;
-
-      if (proj.totalCredits !== actualTotal || proj.investorCount !== actualCount) {
-        supabase!
-          .from("projects")
-          .update({ total_credits: actualTotal, investor_count: actualCount })
-          .eq("id", proj.id)
-          .then(() => {});
-      }
 
       return {
         ...proj,
@@ -440,7 +431,7 @@ export async function dbDeleteProject(projectId: string, teamId?: string): Promi
 }
 
 /**
- * 투자 등록 또는 금액 수정 (Supabase DB)
+ * 투자 등록 또는 금액 수정 (Supabase DB 기준으로 누적액 정확히 집계)
  */
 export async function dbSaveInvestment(
   investment: Investment,
@@ -456,10 +447,20 @@ export async function dbSaveInvestment(
       return { success: false, error: invErr.message };
     }
 
-    // 프로젝트 총 누적액과 투자자 수 갱신
+    // Supabase DB의 실제 investments 테이블에서 해당 프로젝트의 총합을 직접 조회하여 업데이트
+    const { data: realInvs } = await supabase
+      .from("investments")
+      .select("amount")
+      .eq("project_id", investment.projectId);
+
+    const verifiedTotal = realInvs
+      ? realInvs.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+      : newProjectTotal;
+    const verifiedCount = realInvs ? realInvs.length : newInvestorCount;
+
     await supabase.from("projects").update({
-      total_credits: newProjectTotal,
-      investor_count: newInvestorCount,
+      total_credits: verifiedTotal,
+      investor_count: verifiedCount,
     }).eq("id", investment.projectId);
 
     return { success: true };
