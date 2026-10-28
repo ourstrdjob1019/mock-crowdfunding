@@ -472,7 +472,7 @@ function MainDashboard() {
       {/* 1. Project Detail Modal (Wadiz-style Split Viewer) */}
       {selectedProject && (
         <ProjectDetailModal
-          project={selectedProject}
+          project={projects.find((p) => p.id === selectedProject.id) || selectedProject}
           onClose={() => setSelectedProject(null)}
           onOpenEdit={(p) => {
             setSelectedProject(null);

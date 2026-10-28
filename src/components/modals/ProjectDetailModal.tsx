@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Project } from "@/types";
 import { useApp } from "@/context/AppContext";
 import {
@@ -66,6 +66,29 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const [commentInput, setCommentInput] = useState<string>("");
   const [pdfSlideIndex, setPdfSlideIndex] = useState<number>(0);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
+  const [fetchedHtmlMap, setFetchedHtmlMap] = useState<Record<string, string>>({});
+
+  // Supabase Storage에 업로드된 HTML 파일을 상세 모달 열람 시 온디맨드(On-demand)로 로드하여 srcDoc에 주입
+  useEffect(() => {
+    if (!project?.mediaItems) return;
+    project.mediaItems.forEach((item) => {
+      if (
+        item.type === "HTML" &&
+        !item.htmlContent &&
+        item.url &&
+        (item.url.includes("/storage/v1/object/public/") || item.url.endsWith(".html"))
+      ) {
+        fetch(item.url)
+          .then((res) => (res.ok ? res.text() : ""))
+          .then((htmlText) => {
+            if (htmlText) {
+              setFetchedHtmlMap((prev) => ({ ...prev, [item.url]: htmlText }));
+            }
+          })
+          .catch((err) => console.warn("HTML Storage fetch fallback:", err));
+      }
+    });
+  }, [project]);
 
   if (!project || !currentUser) return null;
 
@@ -439,9 +462,9 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                           </div>
                           <div className="p-2 sm:p-3">
                             <div className="relative w-full h-[500px] sm:h-[620px] rounded-xl overflow-hidden border border-slate-200 bg-white shadow-inner">
-                              {item.htmlContent ? (
+                              {item.htmlContent || fetchedHtmlMap[item.url] ? (
                                 <iframe
-                                  srcDoc={item.htmlContent}
+                                  srcDoc={item.htmlContent || fetchedHtmlMap[item.url]}
                                   title={`${project.title} Uploaded HTML`}
                                   className="w-full h-full border-0"
                                   sandbox="allow-scripts allow-forms allow-same-origin"

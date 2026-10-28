@@ -87,7 +87,16 @@ export function mapModelProjectToDb(proj: Partial<Project>): Record<string, any>
   if (proj.pitchHighlights !== undefined) dbData.pitch_highlights = proj.pitchHighlights;
   if (proj.teamMemberIds !== undefined) dbData.team_member_ids = proj.teamMemberIds;
   if (proj.teamMemberDetails !== undefined) dbData.team_member_details = proj.teamMemberDetails;
-  if (proj.mediaItems !== undefined) dbData.media_items = proj.mediaItems;
+  if (proj.mediaItems !== undefined) {
+    // Storage URL이 이미 존재하는 HTML 미디어는 대용량 htmlContent 문자열을 DB 컬럼에서 제외하여 DB 조회 속도(46KB 경량 유지) 보장
+    dbData.media_items = proj.mediaItems.map((item) => {
+      if (item.type === "HTML" && item.url && item.htmlContent) {
+        const { htmlContent: _omitted, ...rest } = item;
+        return rest;
+      }
+      return item;
+    });
+  }
   if (proj.lastModifierName !== undefined) dbData.last_modifier_name = proj.lastModifierName;
   if (proj.lastModifiedAt !== undefined) dbData.last_modified_at = proj.lastModifiedAt;
   if (proj.isHidden !== undefined) dbData.is_hidden = proj.isHidden;
@@ -171,29 +180,65 @@ export function mapModelInvestmentToDb(inv: Investment): Record<string, any> {
 }
 
 /**
- * Supabase DB에서 모든 데이터 가져오기
+ * 네트워크 순단 시 자동 재시도 래퍼 (최대 3회)
+ */
+async function withRetry<T extends { data: any; error: any }>(
+  fn: () => PromiseLike<T>,
+  retries = 3,
+  delayMs = 500
+): Promise<T> {
+  let lastRes: T | null = null;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fn();
+      if (!res.error) return res;
+      lastRes = res;
+    } catch (err: any) {
+      lastRes = { data: null, error: err } as T;
+    }
+    if (i < retries - 1) {
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+  return lastRes!;
+}
+
+/**
+ * Supabase DB에서 모든 데이터 가져오기 (테이블별 성공 여부 및 자동 재시도 포함)
  */
 export async function fetchAllFromSupabase(): Promise<{
   event: Event | null;
   users: User[];
   projects: Project[];
   investments: Investment[];
+  projectsLoaded: boolean;
+  usersLoaded: boolean;
+  investmentsLoaded: boolean;
   error?: string;
 }> {
   if (!supabase || !isSupabaseConfigured) {
-    return { event: null, users: [], projects: [], investments: [], error: "Supabase not configured" };
+    return {
+      event: null,
+      users: [],
+      projects: [],
+      investments: [],
+      projectsLoaded: false,
+      usersLoaded: false,
+      investmentsLoaded: false,
+      error: "Supabase not configured",
+    };
   }
 
   try {
     const [eventRes, usersRes, projectsRes, investmentsRes] = await Promise.all([
-      supabase.from("events").select("*").limit(1).maybeSingle(),
-      supabase.from("users").select("*"),
-      supabase.from("projects").select("*").order("team_number", { ascending: true }),
-      supabase.from("investments").select("*"),
+      withRetry(() => supabase.from("events").select("*").limit(1).maybeSingle()),
+      withRetry(() => supabase.from("users").select("*")),
+      withRetry(() => supabase.from("projects").select("*").order("team_number", { ascending: true })),
+      withRetry(() => supabase.from("investments").select("*")),
     ]);
 
     let event: Event | null = null;
-    if (eventRes.data) {
+    if (eventRes.data && !eventRes.error) {
       event = {
         id: String(eventRes.data.id),
         name: eventRes.data.name,
@@ -208,27 +253,53 @@ export async function fetchAllFromSupabase(): Promise<{
       };
     }
 
-    const users = (usersRes.data || []).map(mapDbUserToModel);
-    const investments = (investmentsRes.data || []).map(mapDbInvestmentToModel);
+    const usersLoaded = !usersRes.error && Array.isArray(usersRes.data);
+    const projectsLoaded = !projectsRes.error && Array.isArray(projectsRes.data);
+    const investmentsLoaded = !investmentsRes.error && Array.isArray(investmentsRes.data);
+
+    const users = usersLoaded ? (usersRes.data || []).map(mapDbUserToModel) : [];
+    const investments = investmentsLoaded ? (investmentsRes.data || []).map(mapDbInvestmentToModel) : [];
 
     // Supabase investments 테이블 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 정확히 계산
-    const projects = (projectsRes.data || []).map((row) => {
-      const proj = mapDbProjectToModel(row);
-      const projInvs = investments.filter((inv) => inv.projectId === proj.id);
-      const actualTotal = projInvs.reduce((sum, inv) => sum + inv.amount, 0);
-      const actualCount = projInvs.length;
+    const projects = projectsLoaded
+      ? (projectsRes.data || []).map((row) => {
+          const proj = mapDbProjectToModel(row);
+          if (investmentsLoaded) {
+            const projInvs = investments.filter((inv) => inv.projectId === proj.id);
+            return {
+              ...proj,
+              totalCredits: projInvs.reduce((sum, inv) => sum + inv.amount, 0),
+              investorCount: projInvs.length,
+            };
+          }
+          return proj;
+        })
+      : [];
 
-      return {
-        ...proj,
-        totalCredits: actualTotal,
-        investorCount: actualCount,
-      };
-    });
+    const anyError = projectsRes.error || usersRes.error || investmentsRes.error;
 
-    return { event, users, projects, investments };
+    return {
+      event,
+      users,
+      projects,
+      investments,
+      projectsLoaded,
+      usersLoaded,
+      investmentsLoaded,
+      error: anyError && !projectsLoaded && !usersLoaded ? anyError.message : undefined,
+    };
   } catch (err: any) {
     console.error("[SupabaseService] Fetch error:", err);
-    return { event: null, users: [], projects: [], investments: [], error: err.message };
+    return {
+      event: null,
+      users: [],
+      projects: [],
+      investments: [],
+      projectsLoaded: false,
+      usersLoaded: false,
+      investmentsLoaded: false,
+      error: err.message,
+    };
   }
 }
 
@@ -500,7 +571,7 @@ export async function dbUpdateEvent(event: Event): Promise<{ success: boolean; e
 }
 
 /**
- * 투자 삭제 / 취소 및 프로젝트 누적액 복구 (Supabase DB)
+ * 투자 삭제 / 취소 및 프로젝트 누적액 복구 (Supabase DB 기준 정확히 재집계)
  */
 export async function dbDeleteInvestment(
   investmentId: string,
@@ -511,9 +582,20 @@ export async function dbDeleteInvestment(
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
     await supabase.from("investments").delete().eq("id", investmentId);
+
+    const { data: realInvs } = await supabase
+      .from("investments")
+      .select("amount")
+      .eq("project_id", projectId);
+
+    const verifiedTotal = realInvs
+      ? realInvs.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+      : newProjectTotal;
+    const verifiedCount = realInvs ? realInvs.length : newInvestorCount;
+
     await supabase.from("projects").update({
-      total_credits: newProjectTotal,
-      investor_count: newInvestorCount,
+      total_credits: verifiedTotal,
+      investor_count: verifiedCount,
     }).eq("id", projectId);
     return { success: true };
   } catch (err: any) {

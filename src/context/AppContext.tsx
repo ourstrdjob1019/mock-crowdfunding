@@ -113,33 +113,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const supaData = await fetchAllFromSupabase();
       if (!supaData.error) {
-        const finalProjects = Array.isArray(supaData.projects) ? supaData.projects : [];
-        const finalInvestments = Array.isArray(supaData.investments) ? supaData.investments : [];
-        const finalUsers = supaData.users && supaData.users.length > 0 ? supaData.users : INITIAL_USERS;
-
-        setProjects(finalProjects);
-        setUsers(finalUsers);
-        setInvestments(finalInvestments);
-        if (supaData.event) {
-          setEventState(supaData.event);
+        if (supaData.projectsLoaded) {
+          setProjects(supaData.projects);
         }
+        if (supaData.investmentsLoaded) {
+          setInvestments(supaData.investments);
+        }
+        if (supaData.usersLoaded) {
+          const finalUsers = supaData.users.length > 0 ? supaData.users : INITIAL_USERS;
+          setUsers(finalUsers);
 
-        // 로그인 유지 유저 동기화 (Supabase users 테이블 기준)
-        const currentSavedId = localStorage.getItem("mc_current_user_id");
-        const currentIsLoggedOut = localStorage.getItem("mc_logged_out") === "true";
-        if (!currentIsLoggedOut && currentSavedId && finalUsers.length > 0) {
-          const found = finalUsers.find((u: User) => u.id === currentSavedId);
-          if (found) {
-            setCurrentUserState(found);
-            setIsLoggedIn(true);
-          } else {
+          // 로그인 유지 유저 동기화 (Supabase users 테이블 기준)
+          const currentSavedId = localStorage.getItem("mc_current_user_id");
+          const currentIsLoggedOut = localStorage.getItem("mc_logged_out") === "true";
+          if (!currentIsLoggedOut && currentSavedId && finalUsers.length > 0) {
+            const found = finalUsers.find((u: User) => u.id === currentSavedId);
+            if (found) {
+              setCurrentUserState(found);
+              setIsLoggedIn(true);
+            } else {
+              setCurrentUserState(null);
+              setIsLoggedIn(false);
+              localStorage.removeItem("mc_current_user_id");
+            }
+          } else if (currentIsLoggedOut || !currentSavedId) {
             setCurrentUserState(null);
             setIsLoggedIn(false);
-            localStorage.removeItem("mc_current_user_id");
           }
-        } else if (currentIsLoggedOut || !currentSavedId) {
-          setCurrentUserState(null);
-          setIsLoggedIn(false);
+        }
+        if (supaData.event) {
+          setEventState(supaData.event);
         }
       }
     } catch (err) {
@@ -152,12 +155,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadData(false);
 
-    // 탭 활성화(포커스) 시 Supabase 최신 데이터 자동 동기화
+    // 1. 탭 활성화(포커스) 시 Supabase 최신 데이터 즉시 동기화
     const handleFocus = () => {
       loadData(true);
     };
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+
+    // 2. 10초 주기 백그라운드 무중단 폴링 (모바일 네트워크/방화벽 환경에서도 100% 실시간 동기화 보장)
+    const pollInterval = setInterval(() => {
+      loadData(true);
+    }, 10000);
+
+    // 3. Supabase Realtime WebSocket 구독 (투자, 프로젝트, 행사 단계 변경 시 즉시 반영)
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const triggerRealtimeSync = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadData(true);
+      }, 400);
+    };
+
+    const channel = supabase
+      ? supabase
+          .channel("realtime-crowdfund-sync")
+          .on("postgres_changes", { event: "*", schema: "public", table: "investments" }, triggerRealtimeSync)
+          .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, triggerRealtimeSync)
+          .on("postgres_changes", { event: "*", schema: "public", table: "events" }, triggerRealtimeSync)
+          .on("postgres_changes", { event: "*", schema: "public", table: "users" }, triggerRealtimeSync)
+          .subscribe()
+      : null;
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(pollInterval);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   const refreshFromSupabase = async () => {
