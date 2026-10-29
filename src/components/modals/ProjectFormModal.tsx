@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Project, LandingFormat, ProjectCategory, MediaType, ProjectMediaItem, TeamMemberDetail } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -106,6 +106,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploadStatus, setUploadStatus] = useState<string>("");
+  const submitLockRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (editProject) {
@@ -616,6 +617,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
   // 4. 저장 제출 처리
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current || isSubmitting || isUploading) return;
     setErrorMessage("");
 
     // 업로드 진행 중 가드
@@ -722,6 +724,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     const topUrl = topItem ? topItem.url : thumbnailUrl;
     const topImages = topItem && topItem.type === "IMAGE" ? (topItem.images || [topUrl]) : [];
 
+    submitLockRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -789,6 +792,7 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
     } catch (err: any) {
       setErrorMessage(`저장 실패: ${err.message || err}`);
     } finally {
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -1497,7 +1501,32 @@ export const ProjectFormModal: React.FC<ProjectFormModalProps> = ({
               </Button>
             </div>
           </div>
-        </form>
+      </form>
+
+        {/* 파일 업로드 또는 DB 출품 저장 중 전면 잠금 오버레이 팝업 (광클릭 및 중복 제출 원천 차단) */}
+        {(isUploading || isSubmitting) && (
+          <div
+            className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 select-none cursor-wait"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-slate-200 flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {isUploading ? "파일을 서버에 업로드하고 있습니다" : "프로젝트 출품 정보를 저장 중입니다"}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {uploadStatus || "서버와 안전하게 데이터 통신 중입니다. 잠시만 기다려 주세요..."}
+                </p>
+              </div>
+              <div className="w-full py-2 px-3 rounded-xl bg-amber-50 border border-amber-200/80 text-[11px] font-semibold text-amber-800">
+                ⚠️ 전송이 완료될 때까지 창을 닫거나 버튼을 연타하지 마세요.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ export const MyInvestmentsView: React.FC<MyInvestmentsViewProps> = ({
     currentUser,
     remainingCredits,
     usedCredits,
+    isMutating,
     getUserTotalInvestments,
     projects,
     cancelInvestment,
@@ -29,6 +30,7 @@ export const MyInvestmentsView: React.FC<MyInvestmentsViewProps> = ({
   const myInvestments = getUserTotalInvestments();
 
   const handleCancel = async (invId: string) => {
+    if (isMutating) return;
     if (confirm("정말로 이 투자를 취소(환불)하시겠습니까?")) {
       const res = await cancelInvestment(invId);
       setCancelNotice(res.message);

@@ -258,9 +258,44 @@ export async function fetchAllFromSupabase(): Promise<{
     const investmentsLoaded = !investmentsRes.error && Array.isArray(investmentsRes.data);
 
     const users = usersLoaded ? (usersRes.data || []).map(mapDbUserToModel) : [];
-    const investments = investmentsLoaded ? (investmentsRes.data || []).map(mapDbInvestmentToModel) : [];
+    const rawInvestments = investmentsLoaded ? (investmentsRes.data || []).map(mapDbInvestmentToModel) : [];
 
-    // Supabase investments 테이블 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 정확히 계산
+    // [중복 데이터 자동 정화 (Deduplication)]
+    // 동일 투자자(investorId)가 동일 프로젝트(projectId)에 중복 생성한 내역이 있다면 가장 마지막 1건만 유지하고 나머지는 제거
+    const dedupMap = new Map<string, Investment>();
+    const duplicateIdsToDelete: string[] = [];
+
+    for (const inv of rawInvestments) {
+      const pairKey = `${inv.investorId}__${inv.projectId}`;
+      const existing = dedupMap.get(pairKey);
+      if (existing) {
+        // 기존 행보다 나중에 생성/수정되었거나 고정 ID(inv-유저__프로젝트) 형식인 쪽을 우선 보존
+        const preferCurrent =
+          inv.id === `inv-${pairKey}` ||
+          (inv.updatedAt || inv.createdAt) >= (existing.updatedAt || existing.createdAt);
+        if (preferCurrent) {
+          duplicateIdsToDelete.push(existing.id);
+          dedupMap.set(pairKey, inv);
+        } else {
+          duplicateIdsToDelete.push(inv.id);
+        }
+      } else {
+        dedupMap.set(pairKey, inv);
+      }
+    }
+
+    // 발견된 중복 쓰레기 행은 백그라운드에서 DB에서도 자동 삭제
+    if (duplicateIdsToDelete.length > 0 && supabase) {
+      supabase
+        .from("investments")
+        .delete()
+        .in("id", duplicateIdsToDelete)
+        .then(() => {});
+    }
+
+    const investments = Array.from(dedupMap.values());
+
+    // Supabase investments 테이블(중복 제거 완료) 데이터를 기준으로 각 프로젝트의 누적 투자액과 참여자 수를 정확히 계산
     const projects = projectsLoaded
       ? (projectsRes.data || []).map((row) => {
           const proj = mapDbProjectToModel(row);
@@ -502,39 +537,83 @@ export async function dbDeleteProject(projectId: string, teamId?: string): Promi
 }
 
 /**
- * 투자 등록 또는 금액 수정 (Supabase DB 기준으로 누적액 정확히 집계)
+ * 투자 등록 또는 금액 수정 (고정 ID 병합 + 중복 행 제거 + 1인 한도 서버 검증 + 누적액 정확히 집계)
  */
 export async function dbSaveInvestment(
   investment: Investment,
   newProjectTotal: number,
-  newInvestorCount: number
-): Promise<{ success: boolean; error?: string }> {
+  newInvestorCount: number,
+  maxBaseCredit: number = 10000
+): Promise<{ success: boolean; error?: string; verifiedTotal?: number; verifiedCount?: number }> {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
+    // 1. 해당 투자자의 현재 DB 투자 내역 조회 (한도 초과 검증 및 동일 프로젝트 구버전 중복 행 탐색)
+    const { data: userInvs } = await supabase
+      .from("investments")
+      .select("id, project_id, amount")
+      .eq("investor_id", investment.investorId);
+
+    if (userInvs && userInvs.length > 0) {
+      // 다른 프로젝트에 투자한 금액 합산 (프로젝트당 1건 기준)
+      const otherProjMap = new Map<string, number>();
+      const sameProjOldIds: string[] = [];
+
+      for (const row of userInvs) {
+        if (row.project_id === investment.projectId) {
+          if (row.id !== investment.id) {
+            sameProjOldIds.push(row.id);
+          }
+        } else {
+          otherProjMap.set(row.project_id, Number(row.amount) || 0);
+        }
+      }
+
+      const usedInOtherProjects = Array.from(otherProjMap.values()).reduce((a, b) => a + b, 0);
+      if (usedInOtherProjects + investment.amount > maxBaseCredit) {
+        return {
+          success: false,
+          error: `잔여 크레딧 한도(${(maxBaseCredit - usedInOtherProjects).toLocaleString()} CR)를 초과하여 투자할 수 없습니다.`,
+        };
+      }
+
+      // 동일 (investor_id, project_id)에 옛날 타임스탬프 ID로 들어간 중복 행이 있다면 즉시 삭제
+      if (sameProjOldIds.length > 0) {
+        await supabase.from("investments").delete().in("id", sameProjOldIds);
+      }
+    }
+
+    // 2. 고정 ID (inv-투자자ID__프로젝트ID) 기반 단일 행 Upsert
     const dbInv = mapModelInvestmentToDb(investment);
-    const { error: invErr } = await supabase.from("investments").upsert([dbInv]);
+    const { error: invErr } = await supabase.from("investments").upsert([dbInv], { onConflict: "id" });
     if (invErr) {
       console.error("[SupabaseService] dbSaveInvestment error:", invErr);
       return { success: false, error: invErr.message };
     }
 
-    // Supabase DB의 실제 investments 테이블에서 해당 프로젝트의 총합을 직접 조회하여 업데이트
+    // 3. Supabase DB의 실제 investments 테이블에서 해당 프로젝트의 총합(투자자별 중복 제거)을 직접 조회하여 업데이트
     const { data: realInvs } = await supabase
       .from("investments")
-      .select("amount")
+      .select("investor_id, amount")
       .eq("project_id", investment.projectId);
 
-    const verifiedTotal = realInvs
-      ? realInvs.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-      : newProjectTotal;
-    const verifiedCount = realInvs ? realInvs.length : newInvestorCount;
+    let verifiedTotal = newProjectTotal;
+    let verifiedCount = newInvestorCount;
+
+    if (realInvs) {
+      const uniqueByInvestor = new Map<string, number>();
+      for (const r of realInvs) {
+        uniqueByInvestor.set(String(r.investor_id), Number(r.amount) || 0);
+      }
+      verifiedTotal = Array.from(uniqueByInvestor.values()).reduce((sum, amt) => sum + amt, 0);
+      verifiedCount = uniqueByInvestor.size;
+    }
 
     await supabase.from("projects").update({
       total_credits: verifiedTotal,
       investor_count: verifiedCount,
     }).eq("id", investment.projectId);
 
-    return { success: true };
+    return { success: true, verifiedTotal, verifiedCount };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -571,33 +650,48 @@ export async function dbUpdateEvent(event: Event): Promise<{ success: boolean; e
 }
 
 /**
- * 투자 삭제 / 취소 및 프로젝트 누적액 복구 (Supabase DB 기준 정확히 재집계)
+ * 투자 삭제 / 취소 및 프로젝트 누적액 복구 (동일 투자자+프로젝트 중복 행까지 일괄 제거 후 재집계)
  */
 export async function dbDeleteInvestment(
   investmentId: string,
   projectId: string,
   newProjectTotal: number,
-  newInvestorCount: number
-): Promise<{ success: boolean; error?: string }> {
+  newInvestorCount: number,
+  investorId?: string
+): Promise<{ success: boolean; error?: string; verifiedTotal?: number; verifiedCount?: number }> {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
     await supabase.from("investments").delete().eq("id", investmentId);
+    if (investorId) {
+      await supabase
+        .from("investments")
+        .delete()
+        .eq("investor_id", investorId)
+        .eq("project_id", projectId);
+    }
 
     const { data: realInvs } = await supabase
       .from("investments")
-      .select("amount")
+      .select("investor_id, amount")
       .eq("project_id", projectId);
 
-    const verifiedTotal = realInvs
-      ? realInvs.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-      : newProjectTotal;
-    const verifiedCount = realInvs ? realInvs.length : newInvestorCount;
+    let verifiedTotal = newProjectTotal;
+    let verifiedCount = newInvestorCount;
+
+    if (realInvs) {
+      const uniqueByInvestor = new Map<string, number>();
+      for (const r of realInvs) {
+        uniqueByInvestor.set(String(r.investor_id), Number(r.amount) || 0);
+      }
+      verifiedTotal = Array.from(uniqueByInvestor.values()).reduce((sum, amt) => sum + amt, 0);
+      verifiedCount = uniqueByInvestor.size;
+    }
 
     await supabase.from("projects").update({
       total_credits: verifiedTotal,
       investor_count: verifiedCount,
     }).eq("id", projectId);
-    return { success: true };
+    return { success: true, verifiedTotal, verifiedCount };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Project } from "@/types";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +13,9 @@ interface InvestModalProps {
 }
 
 export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) => {
-  const { event, currentUser, remainingCredits, getUserInvestmentForProject, invest } = useApp();
+  const { event, currentUser, remainingCredits, isMutating, getUserInvestmentForProject, invest } = useApp();
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState<boolean>(false);
+  const submitLockRef = useRef<boolean>(false);
   
   if (!project || !currentUser) return null;
 
@@ -157,6 +159,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
 
   const handleInvestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current || isMutating || isSubmittingLocal) return;
     setErrorMessage("");
 
     if (isMyTeamProject) {
@@ -180,18 +183,25 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
       return;
     }
 
-    const result = await invest(project.id, currentNum);
-    if (!result.success) {
-      setErrorMessage(result.message);
-      return;
+    submitLockRef.current = true;
+    setIsSubmittingLocal(true);
+    try {
+      const result = await invest(project.id, currentNum);
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      setIsSuccess(true);
+      triggerMoneyEffect();
+
+      setTimeout(() => {
+        onClose();
+      }, 1800);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmittingLocal(false);
     }
-
-    setIsSuccess(true);
-    triggerMoneyEffect();
-
-    setTimeout(() => {
-      onClose();
-    }, 1800);
   };
 
   const numericAmount = parseInt(amountStr, 10) || 0;
@@ -343,14 +353,21 @@ export const InvestModal: React.FC<InvestModalProps> = ({ project, onClose }) =>
             <div className="flex gap-3">
               <button
                 type="button"
+                disabled={isSubmittingLocal || isMutating}
                 onClick={onClose}
-                className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition cursor-pointer"
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer"
               >
                 닫기
               </button>
-              <Button type="submit" variant="primary" isFullWidth size="lg">
+              <Button type="submit" variant="primary" isFullWidth size="lg" disabled={isSubmittingLocal || isMutating}>
                 <span className="flex items-center gap-1.5 justify-center">
-                  <span>{existing ? "금액 변경하기" : `${numericAmount.toLocaleString()} CR 투자하기`}</span>
+                  <span>
+                    {isSubmittingLocal || isMutating
+                      ? "서버에 저장 중..."
+                      : existing
+                      ? "금액 변경하기"
+                      : `${numericAmount.toLocaleString()} CR 투자하기`}
+                  </span>
                   <ArrowRight size={16} />
                 </span>
               </Button>

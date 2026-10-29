@@ -116,7 +116,8 @@ CREATE TABLE public.investments (
   team_id TEXT,
   amount INTEGER NOT NULL DEFAULT 2000,
   created_at TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI'),
-  updated_at TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI')
+  updated_at TEXT DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI'),
+  CONSTRAINT unique_investor_project UNIQUE (investor_id, project_id)
 );
 
 -- 3. 모든 테이블의 RLS 완전 허용 (anon / public 누구나 읽기/쓰기/수정/삭제 가능)

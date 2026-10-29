@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Project } from "@/types";
 import { useApp } from "@/context/AppContext";
 import {
@@ -56,6 +56,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
     event,
     currentUser,
     remainingCredits,
+    isMutating,
+    getUserInvestmentForProject,
     invest,
     addComment,
     deleteProject,
@@ -67,6 +69,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const [pdfSlideIndex, setPdfSlideIndex] = useState<number>(0);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [fetchedHtmlMap, setFetchedHtmlMap] = useState<Record<string, string>>({});
+  const [isInvestingLocal, setIsInvestingLocal] = useState<boolean>(false);
+  const isInvestingRef = useRef<boolean>(false);
 
   // Supabase Storage에 업로드된 HTML 파일을 상세 모달 열람 시 온디맨드(On-demand)로 로드하여 srcDoc에 주입
   useEffect(() => {
@@ -204,7 +208,14 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
     }
   };
 
+  const existingInv = getUserInvestmentForProject(project.id);
+  const availableCreditsForProject = remainingCredits + (existingInv ? existingInv.amount : 0);
+
   const handleInvestment = async (amount: number) => {
+    if (isInvestingRef.current || isMutating || isInvestingLocal) {
+      return;
+    }
+
     if (event.currentStage !== "FUNDING_OPEN") {
       showToast("현재 단계에서는 모의투자를 진행할 수 없습니다.");
       return;
@@ -220,17 +231,24 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
       return;
     }
 
-    if (amount > remainingCredits) {
+    if (amount > availableCreditsForProject) {
       showToast("잔여 모의투자 크레딧이 부족합니다.");
       return;
     }
 
-    const result = await invest(project.id, amount);
-    if (result.success) {
-      triggerMoneyEffect();
-      showToast(`💵 ${result.message}`);
-    } else {
-      showToast(result.message);
+    isInvestingRef.current = true;
+    setIsInvestingLocal(true);
+    try {
+      const result = await invest(project.id, amount);
+      if (result.success) {
+        triggerMoneyEffect();
+        showToast(`💵 ${result.message}`);
+      } else {
+        showToast(result.message);
+      }
+    } finally {
+      isInvestingRef.current = false;
+      setIsInvestingLocal(false);
     }
   };
 
@@ -786,8 +804,10 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                   <button
                     type="button"
                     disabled={
+                      isInvestingLocal ||
+                      isMutating ||
                       event.currentStage !== "FUNDING_OPEN" ||
-                      remainingCredits < (parseInt(investmentInputVal, 10) || 0) ||
+                      availableCreditsForProject < (parseInt(investmentInputVal, 10) || 0) ||
                       (parseInt(investmentInputVal, 10) || 0) < 2000 ||
                       (parseInt(investmentInputVal, 10) || 0) > 5000
                     }
@@ -795,7 +815,11 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                     className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-xs sm:text-sm shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                   >
                     <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>{(parseInt(investmentInputVal, 10) || 0).toLocaleString()} CR 모의투자 참여하기</span>
+                    <span>
+                      {isInvestingLocal || isMutating
+                        ? "서버에 투자 내역 저장 중..."
+                        : `${(parseInt(investmentInputVal, 10) || 0).toLocaleString()} CR ${existingInv ? "투자 금액 변경하기" : "모의투자 참여하기"}`}
+                    </span>
                   </button>
 
                   {remainingCredits < (parseInt(investmentInputVal, 10) || 0) && (
